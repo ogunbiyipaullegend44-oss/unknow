@@ -72,6 +72,12 @@ npm run build       # writes the frontend bundle to ./dist
 npm run server      # serves the UI and API on port 3001
 ```
 
+### Install ATTIS as a web app
+
+The production site can be installed as a Progressive Web App (PWA). It must be served over HTTPS (or localhost). After deploying, open the site in a supported browser and use its install control/menu (for example, **Install app** in Chrome or Edge). On iPhone or iPad, open the site in Safari, tap **Share**, then **Add to Home Screen**.
+
+The app shell, entry scripts/styles, and built assets are cached so the app can open while offline. Research searches, Supabase sign-in and cloud features, and external map/source services still require an internet connection. Development mode does not register the service worker; use `npm run build` followed by `npm run preview` to test installation locally.
+
 ### Deploying to Vercel
 
 Import the repository in Vercel with the project root set to `/` and the **Vite** preset. Use `npm run build` as the build command and `dist` as the output directory. The `api/[...path].js` serverless function hosts the research API on the same domain, so `/api/research`, `/api/research/continue`, `/api/discover/trending`, and `/api/health` work without a separate API host.

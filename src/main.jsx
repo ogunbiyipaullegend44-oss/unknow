@@ -9,6 +9,14 @@ import { CommunityAuthProvider } from './context/CommunityAuthContext.jsx';
 import './styles/themes.css';
 import './styles/global.css';
 
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.error('ATTIS offline app support could not be registered:', error);
+    });
+  });
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppConfigProvider>
