@@ -23,7 +23,7 @@ export default function TrendingDiscover() {
     } catch (requestError) {
       if (requestError.name !== 'AbortError') {
         setError(requestError instanceof TypeError
-          ? 'Could not connect to the research API. Start the local server and try again.'
+          ? 'Could not connect to the research API. If you are running locally, start the API server and try again.'
           : requestError.message);
       }
     } finally {

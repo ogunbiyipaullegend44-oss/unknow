@@ -718,7 +718,7 @@ export default function ResearchDiscovery({
         throw new Error(
           response.ok
             ? 'Research request failed: the API returned an unreadable response. Try again or check the API server logs.'
-            : 'Research API error: the local server returned an unreadable error. Restart it with npm run server, then retry.',
+            : 'Research API error: the server returned an unreadable error. If you are running locally, restart it with npm run server, then retry.',
         );
       }
       if (!response.ok) {

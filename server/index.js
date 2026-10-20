@@ -38,6 +38,29 @@ function sendJson(response, status, data) {
 }
 
 async function readJson(request) {
+  if (request.body !== undefined) {
+    const body = request.body;
+    const serialized = typeof body === 'string'
+      ? body
+      : Buffer.isBuffer(body)
+        ? body.toString('utf8')
+        : null;
+    const size = Buffer.byteLength(serialized ?? JSON.stringify(body));
+    if (size > MAX_BODY_BYTES) {
+      const error = new Error('The request is too large.');
+      error.status = 413;
+      throw error;
+    }
+    if (serialized === null) return body;
+    try {
+      return JSON.parse(serialized);
+    } catch {
+      const error = new Error('The request body must be valid JSON.');
+      error.status = 400;
+      throw error;
+    }
+  }
+
   const chunks = [];
   let size = 0;
 
@@ -1018,7 +1041,7 @@ function serveFrontend(request, response) {
   createReadStream(filePath).pipe(response);
 }
 
-export function createServer({
+export function createRequestHandler({
   fetchImpl = globalThis.fetch,
   tavilyApiKey = process.env.TAVILY_API_KEY || '',
   braveApiKey = process.env.BRAVE_SEARCH_API_KEY || '',
@@ -1029,7 +1052,7 @@ export function createServer({
   const requestsByAddress = new Map();
   const trendingCache = { value: null, expiresAt: 0, pending: null };
 
-  return createHttpServer(async (request, response) => {
+  return async (request, response) => {
     const url = new URL(request.url, 'http://localhost');
 
     if (url.pathname === '/api/health' && request.method === 'GET') {
@@ -1208,7 +1231,11 @@ export function createServer({
       return;
     }
     serveFrontend(request, response);
-  });
+  };
+}
+
+export function createServer(options = {}) {
+  return createHttpServer(createRequestHandler(options));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

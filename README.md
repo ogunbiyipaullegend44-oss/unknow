@@ -72,6 +72,14 @@ npm run build       # writes the frontend bundle to ./dist
 npm run server      # serves the UI and API on port 3001
 ```
 
+### Deploying to Vercel
+
+Import the repository in Vercel with the project root set to `/` and the **Vite** preset. Use `npm run build` as the build command and `dist` as the output directory. The `api/[...path].js` serverless function hosts the research API on the same domain, so `/api/research`, `/api/research/continue`, `/api/discover/trending`, and `/api/health` work without a separate API host.
+
+Optional provider credentials can be added under the Vercel project's **Settings → Environment Variables** using the server-side names in `.env.example` (for example, `TAVILY_API_KEY` or `YOUTUBE_API_KEY`). Do not use `VITE_` prefixes for server-side secrets. Supabase browser settings use `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; never add a Supabase service-role key to the frontend. The app can run without optional provider credentials, though some discovery sources will be unavailable.
+
+If visitors should be able to use the deployed site without signing in to Vercel, check **Settings → Deployment Protection** and disable protection for the production deployment.
+
 Optional `OPENALEX_MAILTO` and `CROSSREF_MAILTO` environment variables can provide a contact email to the public catalogs. `SEMANTIC_SCHOLAR_API_KEY`, `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_ENGINE_ID`, `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, and `YOUTUBE_API_KEY` are optional server-side credentials. For Google web results, create a Programmable Search Engine, enable the Custom Search JSON API in Google Cloud, and configure both the API key and search engine ID. Create keys in the respective Tavily and Brave Search dashboards to enable their web results. To enable YouTube, create a Google Cloud API key and enable **YouTube Data API v3** for its project. Configure credentials in your server environment or hosting provider's secret settings. For PowerShell, set them in the terminal before starting the server:
 
 ```powershell

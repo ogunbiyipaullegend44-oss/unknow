@@ -1,12 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from '../server/index.js';
+import { createRequestHandler, createServer } from '../server/index.js';
 import {
   analyzeQuestion,
   normalizeSources,
   validateResearchRequest,
 } from '../server/research.js';
 import { buildResearchSearchQuery } from '../src/utils/researchQuery.js';
+
+test('Vercel-compatible handler accepts a parsed JSON request body', async () => {
+  const response = {
+    status: null,
+    headers: null,
+    body: '',
+    writeHead(status, headers) {
+      this.status = status;
+      this.headers = headers;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+  const handler = createRequestHandler();
+
+  await handler({
+    url: '/api/research',
+    method: 'POST',
+    body: { question: 'short', purposes: ['general'] },
+    socket: { remoteAddress: '127.0.0.1' },
+  }, response);
+
+  assert.equal(response.status, 400);
+  assert.match(JSON.parse(response.body).error, /8 characters/);
+});
 
 test('research provider queries keep recurring topic words and drop question filler', () => {
   const question = 'Please research renewable energy policy and explain how renewable energy policy affects grid storage and offshore wind deployment across recent national programs and funding initiatives.';
