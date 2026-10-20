@@ -801,8 +801,8 @@
 
 .research-question-input-wrap textarea {
   min-height: 124px;
-  padding-right: 58px;
-  padding-bottom: 58px;
+  padding-right: 48px;
+  padding-bottom: 48px;
 }
 
 .research-input-meta {
@@ -910,13 +910,13 @@
   right: 8px;
   bottom: 8px;
   display: grid;
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
   place-items: center;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #2563eb;
   color: #fff;
 }
@@ -1808,7 +1808,7 @@
     font-size: 12px;
   }
 
-  .research-submit {
+  .research-submit:not(.research-submit-icon) {
     width: 100%;
   }
 
