@@ -1,0 +1,121 @@
+.related-topics {
+  display: grid;
+  gap: 14px;
+}
+
+.related-topics-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.related-topics-heading p,
+.related-topics-note {
+  margin: 5px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.related-topic-list {
+  display: grid;
+  gap: 12px;
+}
+
+.related-topic-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-1);
+}
+
+.related-topic-card h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.related-topic-question {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-0);
+  color: var(--text-0);
+  text-align: left;
+}
+
+.related-topic-question:hover,
+.related-topic-category:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.related-topic-question span,
+.related-topic-categories > span {
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.related-topic-question strong {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.related-topic-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 14px 0;
+}
+
+.related-topic-details div:last-child {
+  grid-column: 1 / -1;
+}
+
+.related-topic-details dt {
+  margin-bottom: 3px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.related-topic-details dd {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.related-topic-categories {
+  display: grid;
+  gap: 7px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.related-topic-categories > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.related-topic-category {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .related-topic-details {
+    grid-template-columns: 1fr;
+  }
+
+  .related-topic-details div:last-child {
+    grid-column: auto;
+  }
+}
