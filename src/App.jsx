@@ -21,12 +21,9 @@ export default function App() {
     );
   }
 
-  // First-run detection: the user has never explicitly picked a map provider.
-  // We intentionally do NOT factor in whether an API key exists — a Docker
-  // user with a key in .env should still get to choose OpenStreetMap vs
-  // Google Maps. When they pick Google, the Welcome screen skips the
-  // key-entry step because the key is already configured. A Clear-All-Data
-  // wipe removes the provider choice too, so it also lands here again.
+  // Keep the welcome home for users without a saved map preference. Map setup
+  // no longer blocks entry to research; the provider can be selected later
+  // from the Map tab. Clearing app data returns users to this welcome home.
   const isFirstRun = mapProviderSource === null;
   if (isFirstRun) {
     return (
