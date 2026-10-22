@@ -444,6 +444,13 @@
   padding: clamp(32px, 6vw, 68px) 0 72px;
 }
 
+.research-main.research-main-question {
+  display: flex;
+  min-height: calc(100vh - 60px);
+  flex-direction: column;
+  padding: clamp(28px, 6vh, 64px) 0 clamp(24px, 5vh, 48px);
+}
+
 .research-page-controls {
   display: flex;
   align-items: center;
@@ -702,8 +709,7 @@
 }
 
 .research-question-intro {
-  margin-top: clamp(64px, 16vh, 170px);
-  margin-bottom: 20px;
+  margin: 0 auto 24px;
 }
 
 .research-question-edit-intro {
@@ -768,12 +774,19 @@
 }
 
 .research-question-form {
-  max-width: 680px;
-  padding: clamp(16px, 3vw, 24px);
+  width: min(100%, 720px);
+  max-width: none;
+  flex: 0 0 auto;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .research-options-drawer {
-  margin-top: 14px;
+  margin: 0 0 14px;
 }
 
 .research-options-content {
@@ -800,9 +813,13 @@
 }
 
 .research-question-input-wrap textarea {
-  min-height: 124px;
+  height: auto;
+  min-height: 64px;
+  max-height: 40vh;
+  overflow-y: auto;
   padding-right: 48px;
   padding-bottom: 48px;
+  resize: none;
 }
 
 .research-input-meta {

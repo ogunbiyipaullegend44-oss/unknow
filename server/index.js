@@ -1241,6 +1241,14 @@ export function createServer(options = {}) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3001);
   const server = createServer();
+  server.on('error', (error) => {
+    console.error(
+      error.code === 'EADDRINUSE'
+        ? `Research API could not start: port ${port} is already in use.`
+        : `Research API could not start: ${error.message}`,
+    );
+    process.exitCode = 1;
+  });
   server.listen(port, '0.0.0.0', () => {
     console.log(`Research API listening on http://localhost:${port}`);
   });

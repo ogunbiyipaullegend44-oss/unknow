@@ -265,6 +265,13 @@ export default function ResearchDiscovery({
   }, [dateRange, query, research, sort, view]);
 
   useEffect(() => {
+    const textarea = questionInputRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, window.innerHeight * 0.4, 360)}px`;
+  }, [question]);
+
+  useEffect(() => {
     const updateDisplayName = (event) => {
       const nextName = event.detail?.displayName?.trim() ?? '';
       setDisplayName(nextName);
@@ -945,7 +952,7 @@ export default function ResearchDiscovery({
             >
               <Icon name="menu" size={19} />
             </button>
-            <span>ATTIS Researcher</span>
+            <span>Brinfolynk</span>
           </div>
           <nav
             className="research-sidebar-nav"
@@ -1187,7 +1194,7 @@ export default function ResearchDiscovery({
           <ThemeToggle />
           </header>
 
-          <main className="research-main">
+          <main className={`research-main${activePage === 'research' && researchScreen === 'form' ? ' research-main-question' : ''}`}>
         {projectStorageWarning && <p className="discovery-warning" role="status">{projectStorageWarning}</p>}
         {projectActionError && <p className="discovery-warning" role="alert">{projectActionError}</p>}
         {['account-profile', 'account-settings', 'account-security'].includes(activePage) && (
@@ -1263,44 +1270,14 @@ export default function ResearchDiscovery({
           </div>
         )}
 
-        {researchScreen === 'form' && <section className={`research-intro research-question-intro${research ? ' research-question-edit-intro' : ''}`} aria-labelledby="research-heading">
-          {displayName && !research && <p className="research-eyebrow">{getTimeGreeting()} {displayName}</p>}
-          <h1 id="research-heading">{research ? 'EDIT YOUR RESEARCH' : 'START WITH A QUESTION'}</h1>
-          {research && <p className="research-edit-context">Update the question or search settings below. Applying changes runs a fresh search in this same research tab; existing results remain until the search succeeds.</p>}
-        </section>}
+        {researchScreen === 'form' && research && (
+          <section className="research-intro research-question-intro research-question-edit-intro" aria-labelledby="research-heading">
+            <h1 id="research-heading">EDIT YOUR RESEARCH</h1>
+            <p className="research-edit-context">Update the question or search settings below. Applying changes runs a fresh search in this same research tab; existing results remain until the search succeeds.</p>
+          </section>
+        )}
 
         {researchScreen === 'form' && <form className="research-form research-question-form" onSubmit={(event) => startResearch(event, null, null, { reuseCurrentResearch: Boolean(research) })}>
-          <label htmlFor="research-question">{research ? 'Research question' : 'What would you like to investigate?'}</label>
-          <div className="research-question-input-wrap">
-            <textarea
-              ref={questionInputRef}
-              id="research-question"
-              value={question}
-              onFocus={() => setResearchOptionsOpen(true)}
-              onChange={(event) => {
-                setQuestion(event.target.value);
-                if (event.target.value.trim()) setResearchOptionsOpen(true);
-              }}
-              placeholder="For example: How does access to quality education affect employment in West Africa?"
-              rows={3}
-              required
-              aria-describedby="question-help question-count"
-            />
-            <button
-              className="btn btn-primary research-submit research-submit-icon"
-              type="submit"
-              disabled={loading}
-              aria-label={loading ? 'Searching sources and videos' : research ? 'Update research' : 'Start research'}
-              title={loading ? 'Searching sources and videos' : research ? 'Update research' : 'Start research'}
-            >
-              {loading ? <span className="research-spinner" aria-hidden="true" /> : <Icon name="enter" size={13} />}
-            </button>
-          </div>
-          <div className="research-input-meta">
-            <span id="question-help">{research ? 'Update this question and its search settings.' : 'Enter your research question to begin.'}</span>
-            <span id="question-count">{question.length.toLocaleString()} characters</span>
-          </div>
-
           <details
             className="research-options-drawer"
             ref={researchOptionsRef}
@@ -1407,6 +1384,34 @@ export default function ResearchDiscovery({
               </fieldset>
             </div>
           </details>
+          <label htmlFor="research-question">{research ? 'Research question' : 'What would you like to investigate?'}</label>
+          <div className="research-question-input-wrap">
+            <textarea
+              ref={questionInputRef}
+              id="research-question"
+              value={question}
+              onChange={(event) => {
+                setQuestion(event.target.value);
+              }}
+              placeholder="For example: How does access to quality education affect employment in West Africa?"
+              rows={2}
+              required
+              aria-describedby="question-help question-count"
+            />
+            <button
+              className="btn btn-primary research-submit research-submit-icon"
+              type="submit"
+              disabled={loading}
+              aria-label={loading ? 'Searching sources and videos' : research ? 'Update research' : 'Start research'}
+              title={loading ? 'Searching sources and videos' : research ? 'Update research' : 'Start research'}
+            >
+              {loading ? <span className="research-spinner" aria-hidden="true" /> : <Icon name="enter" size={13} />}
+            </button>
+          </div>
+          <div className="research-input-meta">
+            <span id="question-help">{research ? 'Update this question and its search settings.' : 'Enter your research question to begin.'}</span>
+            <span id="question-count">{question.length.toLocaleString()} characters</span>
+          </div>
 
           {research && (
             <div className="research-edit-form-actions">
