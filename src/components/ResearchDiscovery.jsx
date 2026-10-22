@@ -203,6 +203,9 @@ export default function ResearchDiscovery({
   const [displayName, setDisplayName] = useState(
     () => window.localStorage.getItem('attis:display-name')?.trim() ?? '',
   );
+  const firstName = user && displayName.trim()
+    ? displayName.trim().split(/\s+/)[0]
+    : '';
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [question, setQuestion] = useState('');
@@ -243,6 +246,7 @@ export default function ResearchDiscovery({
   const [sort, setSort] = useState('newest');
   const [view, setView] = useState('overview');
   const [activePage, setActivePageState] = useState(initialPage);
+  const [hasNavigatedFromHome, setHasNavigatedFromHome] = useState(false);
   const [resultPageLimit, setResultPageLimit] = useState(RESULTS_PER_PAGE);
   const [selectedResearchArea, setSelectedResearchArea] = useState(null);
   const [researchDefaults, setResearchDefaults] = useState(null);
@@ -255,6 +259,7 @@ export default function ResearchDiscovery({
 
   const setActivePage = (page) => {
     if (page === activePageRef.current) return;
+    setHasNavigatedFromHome(true);
     pageHistoryRef.current.push(activePageRef.current);
     if (pageHistoryRef.current.length > 30) pageHistoryRef.current.shift();
     activePageRef.current = page;
@@ -352,6 +357,7 @@ export default function ResearchDiscovery({
     pageHistoryRef.current = [];
     activePageRef.current = initialPage;
     setActivePageState(initialPage);
+    setHasNavigatedFromHome(false);
   }, [entryKey, initialPage]);
 
   useEffect(() => {
@@ -663,6 +669,7 @@ export default function ResearchDiscovery({
     { reuseCurrentResearch = false } = {},
   ) => {
     event?.preventDefault();
+    setHasNavigatedFromHome(true);
     setActivePage('research');
     const effectivePurposes = purposes;
     const effectiveRegionMode = regionMode;
@@ -909,6 +916,7 @@ export default function ResearchDiscovery({
       return;
     }
     if (destination === 'claims' || destination === 'discovery') {
+      setHasNavigatedFromHome(true);
       setActivePage('research');
       setView(destination);
       return;
@@ -956,8 +964,6 @@ export default function ResearchDiscovery({
             >
               <Icon name="menu" size={19} />
             </button>
-            <img className="research-sidebar-brand-logo" src="/brinfolynk-mark.png" alt="" />
-            <span>Brinfolynk</span>
           </div>
           <nav
             className="research-sidebar-nav"
@@ -1001,12 +1007,12 @@ export default function ResearchDiscovery({
               <button
                 type="button"
                 className="research-sidebar-project"
-                aria-label="Research File Builder"
+                aria-label="Create a File"
                 aria-current={activePage === 'file-builder' ? 'page' : undefined}
                 onClick={() => setActivePage('file-builder')}
               >
                 <Icon name="file" size={17} />
-                <span>Research File Builder</span>
+                <span>Create a File</span>
               </button>
             </div>
             <button
@@ -1184,16 +1190,18 @@ export default function ResearchDiscovery({
             >
               <Icon name="menu" />
             </button>
-            <button
-              className="btn btn-ghost research-back"
-              onClick={goBackToRecentPage}
-              type="button"
-              aria-label="Back"
-              title="Back"
-            >
-              <Icon name="arrow" />
-              {backLabel && <span>{backLabel}</span>}
-            </button>
+            {hasNavigatedFromHome && (
+              <button
+                className="btn btn-ghost research-back"
+                onClick={goBackToRecentPage}
+                type="button"
+                aria-label="Back"
+                title="Back"
+              >
+                <Icon name="arrow" />
+                {backLabel && <span>{backLabel}</span>}
+              </button>
+            )}
           </div>
           <div className="research-topbar-label">Research workspace</div>
           <ThemeToggle />
@@ -1282,9 +1290,9 @@ export default function ResearchDiscovery({
           </section>
         )}
 
-        {researchScreen === 'form' && <div className={`research-form-stage${!research ? ' research-form-stage-home' : ''}`}>
+        {researchScreen === 'form' && <div className={`research-form-stage${!research ? ' research-form-stage-home' : ''}${!research && researchOptionsOpen ? ' research-form-stage-filter-open' : ''}`}>
         {!research && (
-          <div className="research-home-brand" aria-label="Brinfolynk">
+          <div className="research-home-brand">
             <img src="/brinfolynk-mark.png" alt="" />
             <h1>Brinfolynk</h1>
           </div>
@@ -1397,8 +1405,15 @@ export default function ResearchDiscovery({
               </fieldset>
             </div>
           </details>
-          <label htmlFor="research-question">{research ? 'Research question' : 'What would you like to investigate?'}</label>
-          <div className="research-question-input-wrap">
+          <label htmlFor="research-question">
+            {research
+              ? 'Research question'
+              : `${firstName ? `${firstName}, ` : ''}what would you like to investigate?`}
+          </label>
+          <div
+            className="research-question-input-wrap"
+            style={{ '--question-input-width': `${Math.min(100, 58 + question.length * 1.5)}%` }}
+          >
             <textarea
               ref={questionInputRef}
               id="research-question"
@@ -1409,7 +1424,7 @@ export default function ResearchDiscovery({
               placeholder="For example: How does access to quality education affect employment in West Africa?"
               rows={2}
               required
-              aria-describedby="question-help question-count"
+              aria-describedby={research ? 'question-help question-count' : 'question-count'}
             />
             <button
               className="btn btn-primary research-submit research-submit-icon"
@@ -1422,7 +1437,7 @@ export default function ResearchDiscovery({
             </button>
           </div>
           <div className="research-input-meta">
-            <span id="question-help">{research ? 'Update this question and its search settings.' : 'Enter your research question to begin.'}</span>
+            {research && <span id="question-help">Update this question and its search settings.</span>}
             <span id="question-count">{question.length.toLocaleString()} characters</span>
           </div>
 

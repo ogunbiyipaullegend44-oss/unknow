@@ -17,7 +17,7 @@ const PAGE_TITLES = {
   'org-findings': 'Evidence and findings',
   'org-geography': 'Geographic explorer',
   'org-briefings': 'Research briefings',
-  'file-builder': 'Research file builder',
+  'file-builder': 'Create a File',
   'saved-files': 'Saved files',
   'team-workspace': 'Team workspace',
 };

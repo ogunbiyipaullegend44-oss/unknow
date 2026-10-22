@@ -46,31 +46,21 @@
 }
 
 .welcome-logo {
-  width: 64px;
-  height: 64px;
-  flex: 0 0 64px;
-  border-radius: 15px;
+  width: 76px;
+  height: 76px;
+  flex: 0 0 76px;
+  border-radius: 18px;
   object-fit: contain;
   background: #fff;
   box-shadow: var(--shadow-lg);
 }
 
-.welcome-title {
-  margin: 0;
-  font-size: clamp(30px, 5vw, 42px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-
 @media (max-width: 480px) {
-  .welcome-brand-lockup {
-    gap: 10px;
-  }
-
   .welcome-logo {
-    width: 54px;
-    height: 54px;
-    flex-basis: 54px;
+    width: 64px;
+    height: 64px;
+    flex-basis: 64px;
+    border-radius: 15px;
   }
 }
 

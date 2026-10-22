@@ -27,15 +27,11 @@ export default function Welcome() {
           <main className="welcome-content">
             <div className="welcome-brand">
               <div className="welcome-brand-lockup">
-                <img className="welcome-logo" src="/brinfolynk-mark.png" alt="" />
-                <h1 className="welcome-title">Brinfolynk</h1>
+                <img className="welcome-logo" src="/brinfolynk-mark.png" alt="Brinfolynk" />
               </div>
             </div>
           </main>
 
-          <div className="welcome-footer">
-            Mapping projects stay on this device · Research searches use public catalogs
-          </div>
         </div>
       </div>
 
