@@ -2,18 +2,20 @@ import { useMemo } from 'react';
 import { buildResearchGaps } from './researchGapUtils.js';
 import './ResearchGaps.css';
 
-export default function ResearchGaps({ research, onUseSearch }) {
+export default function ResearchGaps({ research, onUseSearch, onOpenArea }) {
   const gaps = useMemo(() => buildResearchGaps(research), [research]);
+  const researchAreas = research.analysis?.researchAreas ?? [];
 
   return (
     <section className="research-gaps" aria-labelledby="research-gaps-heading">
       <header className="research-gaps-heading">
         <div>
           <p className="research-eyebrow">Collection-scoped review</p>
-          <h3 id="research-gaps-heading">Potential gaps in this evidence collection</h3>
+          <h3 id="research-gaps-heading">Explore</h3>
           <p>
             These are prompts based on retrieved records, metadata, and snippets—not confirmed gaps in the wider field.
-            Search matching is approximate, and original sources were not fully reviewed.
+            Open a related area to review its matching sources. Search matching is approximate,
+            and original sources were not fully reviewed.
           </p>
         </div>
         <strong>{gaps.length} potential gap{gaps.length === 1 ? '' : 's'}</strong>
@@ -38,7 +40,17 @@ export default function ResearchGaps({ research, onUseSearch }) {
                 </div>
                 <div>
                   <dt>Relevant research area</dt>
-                  <dd>{item.researchArea}</dd>
+                  <dd>
+                    {researchAreas.some((area) => area.title === item.researchArea) ? (
+                      <button
+                        className="research-gap-area-link"
+                        type="button"
+                        onClick={() => onOpenArea(item.researchArea)}
+                      >
+                        {item.researchArea}
+                      </button>
+                    ) : item.researchArea}
+                  </dd>
                 </div>
                 <div>
                   <dt>What information is missing</dt>

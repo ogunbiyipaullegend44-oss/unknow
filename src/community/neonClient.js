@@ -1,4 +1,4 @@
-import { createClient, SupabaseAuthAdapter } from '@neondatabase/neon-js';
+import { BetterAuthVanillaAdapter, createClient, SupabaseAuthAdapter } from '@neondatabase/neon-js';
 
 const authUrl = import.meta.env.VITE_NEON_AUTH_URL?.trim() || '';
 const dataApiUrl = import.meta.env.VITE_NEON_DATA_API_URL?.trim() || '';
@@ -23,5 +23,12 @@ export const neon = neonConfigError
   ? null
   : createClient({
     auth: { url: authUrl, adapter: SupabaseAuthAdapter() },
+    dataApi: { url: dataApiUrl },
+  });
+
+export const neonRegistration = neonConfigError
+  ? null
+  : createClient({
+    auth: { url: authUrl, adapter: BetterAuthVanillaAdapter() },
     dataApi: { url: dataApiUrl },
   });

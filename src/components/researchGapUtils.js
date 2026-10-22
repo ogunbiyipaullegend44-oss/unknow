@@ -145,7 +145,7 @@ export function buildResearchGaps(research, now = new Date()) {
         description: matches.length
           ? `Limited collection coverage: ${area.title}`
           : `No clear collection match: ${area.title}`,
-        whyItMatters: 'Research Map areas represent different aspects of the question; sparse matching records may leave this part underexplored in the current collection.',
+        whyItMatters: 'Explore areas represent different aspects of the question; sparse matching records may leave this part underexplored in the current collection.',
         supportingExplanation: `${matches.length} of ${records.length} scholarly records and web results matched the area’s wording. Area matching uses titles, retrieved abstracts or snippets, and publisher names; it does not establish relevance or field-wide coverage.`,
         researchArea: area.title,
         reviewedRecords: matches,

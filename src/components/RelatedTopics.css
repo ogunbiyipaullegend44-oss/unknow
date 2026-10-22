@@ -36,20 +36,12 @@
 
 .related-topic-question {
   display: grid;
-  width: 100%;
   gap: 5px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--bg-0);
   color: var(--text-0);
-  text-align: left;
-}
-
-.related-topic-question:hover,
-.related-topic-category:hover {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .related-topic-question span,
@@ -95,19 +87,72 @@
   border-top: 1px solid var(--border);
 }
 
-.related-topic-categories > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+.related-topic-categories p {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.related-topic-category {
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--bg-0);
-  color: var(--text-1);
+.related-topic-search {
+  margin-top: 14px;
+}
+
+.related-topic-error {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.related-topic-results {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.related-topic-results h5 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.related-topic-results > p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.related-topic-results ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.related-topic-results li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.related-topic-results a {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+}
+
+.related-topic-results li > span {
+  color: var(--text-2);
   font-size: 11px;
+}
+
+.related-topic-results li > p {
+  margin: 2px 0 0;
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 @media (max-width: 600px) {

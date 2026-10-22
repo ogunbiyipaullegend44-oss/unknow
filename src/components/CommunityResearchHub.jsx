@@ -176,7 +176,7 @@ export default function CommunityResearchHub() {
     <section className="community-hub" aria-label="Community Research Hub">
       <header className="community-hub-header">
         <div><p className="research-eyebrow">Shared research library</p><h1>Community Research Hub</h1><p>Discover and evaluate research voluntarily shared by the community.</p></div>
-        {user && <div className="community-account"><span>{user.user_metadata?.display_name || user.email}</span><button type="button" className="btn btn-ghost" onClick={() => signOut().catch((authError) => setError(authError.message))}>Sign out</button></div>}
+        {user && <div className="community-account"><span>{user.user_metadata?.displayName || user.user_metadata?.display_name || user.email}</span><button type="button" className="btn btn-ghost" onClick={() => signOut().catch((authError) => setError(authError.message))}>Sign out</button></div>}
       </header>
 
       {configError ? <div className="community-alert" role="status"><strong>Hub setup required</strong><p>{configError}</p><p>Configure Neon and apply the migration to enable shared publishing, ratings, and reports.</p></div>

@@ -3,6 +3,14 @@
   gap: 16px;
 }
 
+.research-gap-area-link {
+  padding: 0;
+  color: var(--accent);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .research-gaps-heading {
   display: flex;
   align-items: flex-start;

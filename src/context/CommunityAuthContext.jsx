@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { neon, neonConfigError } from '../community/neonClient.js';
+import { neon, neonConfigError, neonRegistration } from '../community/neonClient.js';
 
 const CommunityAuthContext = createContext(null);
 
@@ -46,12 +46,19 @@ export function CommunityAuthProvider({ children }) {
     },
     async signUp(email, password, displayName) {
       if (!neon) throw new Error(neonConfigError);
-      const { error: authError } = await neon.auth.signUp({
+      if (!neonRegistration) throw new Error(neonConfigError);
+      const { data, error: authError } = await neonRegistration.auth.signUp.email({
         email,
         password,
-        options: { data: { display_name: displayName } },
+        name: displayName,
       });
       if (authError) throw authError;
+      if (!data?.user) throw new Error('Neon Auth did not confirm account creation.');
+
+      const { data: sessionData, error: sessionError } = await neon.auth.getSession({ forceFetch: true });
+      if (sessionError) throw sessionError;
+      setUser(sessionData.session?.user ?? null);
+      return { requiresEmailVerification: !sessionData.session };
     },
     async signOut() {
       if (!neon) return;

@@ -47,7 +47,7 @@ export default function ClaimEvidence({ research }) {
           <p>
             {sourcesWithText
               ? 'Retrieved descriptions and abstracts did not contain sentences with clear wording overlap with this research question. This is not evidence that no relevant sources exist.'
-              : 'The retrieved source records do not include abstracts or descriptions. Open sources in Source discovery to review their original context.'}
+              : 'The retrieved source records do not include abstracts or descriptions. Open Sources to review their original context.'}
           </p>
         </section>
       ) : (

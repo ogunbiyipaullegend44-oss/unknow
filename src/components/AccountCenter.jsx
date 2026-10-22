@@ -20,7 +20,7 @@ const DEFAULT_PREFERENCES = {
   geographic_focus: 'worldwide',
   region: '',
   publication_period: 'any',
-  default_view: 'overview',
+  default_view: 'discovery',
 };
 
 function profileFromRow(row) {
@@ -36,10 +36,14 @@ function profileFromRow(row) {
 
 function preferencesFromRow(row, theme) {
   const saved = row?.research_preferences ?? {};
+  const defaultView = ['discovery', 'sources'].includes(saved.default_view)
+    ? saved.default_view
+    : DEFAULT_PREFERENCES.default_view;
   return {
     ...DEFAULT_PREFERENCES,
     ...saved,
     theme: saved.theme ?? theme,
+    default_view: defaultView,
   };
 }
 
@@ -84,7 +88,7 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       if (!active) return;
       const nextProfile = profileFromRow(data);
       if (!nextProfile.display_name) {
-        nextProfile.display_name = user.user_metadata?.display_name ?? '';
+        nextProfile.display_name = user.user_metadata?.displayName ?? user.user_metadata?.display_name ?? '';
       }
       setProfile(nextProfile);
       try {
@@ -274,12 +278,15 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
   return (
     <section className="account-center" aria-labelledby="account-center-title">
       <p className="research-eyebrow">Your account</p>
-      <h1 id="account-center-title">{section === 'profile' ? 'Profile' : section === 'settings' ? 'Settings' : 'Privacy & Security'}</h1>
-      <nav className="account-section-tabs" aria-label="Account sections">
-        <button type="button" aria-current={section === 'profile' ? 'page' : undefined} onClick={() => onSectionChange('account-profile')}>Profile</button>
-        <button type="button" aria-current={section === 'settings' ? 'page' : undefined} onClick={() => onSectionChange('account-settings')}>Settings</button>
-        <button type="button" aria-current={section === 'security' ? 'page' : undefined} onClick={() => onSectionChange('account-security')}>Privacy &amp; Security</button>
-      </nav>
+      <h1 id="account-center-title">
+        {section === 'profile'
+          ? 'Profile'
+          : section === 'settings'
+            ? 'Settings'
+            : section === 'privacy'
+              ? 'Privacy & Data'
+              : 'Security'}
+      </h1>
       {loadingProfile && <p className="account-state" role="status">Loading your private profile…</p>}
       {error && <p className="account-message account-error" role="alert">{error}</p>}
       {notice && <p className="account-message account-success" role="status">{notice}</p>}
@@ -390,7 +397,7 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
               <label><span>Geographic focus</span><select value={preferences.geographic_focus} onChange={(event) => setPreferences({ ...preferences, geographic_focus: event.target.value })}><option value="worldwide">Worldwide</option><option value="region">Specific country or region</option></select></label>
               {preferences.geographic_focus === 'region' && <label><span>Country or region</span><input maxLength={160} value={preferences.region} onChange={(event) => setPreferences({ ...preferences, region: event.target.value })} required /></label>}
               <label><span>Default publication period</span><select value={preferences.publication_period} onChange={(event) => setPreferences({ ...preferences, publication_period: event.target.value })}><option value="any">Any date</option><option value="1">Past year</option><option value="3">Past 3 years</option><option value="5">Past 5 years</option></select></label>
-              <label><span>Default research view</span><select value={preferences.default_view} onChange={(event) => setPreferences({ ...preferences, default_view: event.target.value })}><option value="overview">Research Map</option><option value="discovery">Source discovery</option><option value="sources">Sources</option></select></label>
+              <label><span>Default research view</span><select value={preferences.default_view} onChange={(event) => setPreferences({ ...preferences, default_view: event.target.value })}><option value="discovery">Sources</option><option value="sources">Source list</option><option value="research-gaps">Explore</option></select></label>
             </div>
             <p className="account-muted">The app currently supports English only. Notification controls, source-type restrictions, and summary-detail levels are not shown because those features are not implemented yet.</p>
             <div className="account-actions">
@@ -419,20 +426,23 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       )}
 
       {!loadingProfile && section === 'security' && (
+        <section className="account-card">
+          <h2>Sign-in credentials</h2>
+          <p>Your account is managed by Neon Auth. This app does not currently support changing the registered email address or password.</p>
+          <p className="account-muted">Registered email: {user.email || 'Unavailable'}</p>
+        </section>
+      )}
+
+      {!loadingProfile && section === 'privacy' && (
         <div className="account-form">
-          <section className="account-card">
-            <h2>Sign-in credentials</h2>
-            <p>Your account is managed by Neon Auth. This app does not currently support changing the registered email address or password.</p>
-            <p className="account-muted">Registered email: {user.email || 'Unavailable'}</p>
-          </section>
           <section className="account-card">
             <h2>Privacy and data</h2>
             <p>Profile details and profile photos are private to your account. Community publications and related records are shared according to their publication and moderation status. Research history, saved collections, and mapping projects remain in this browser and are not uploaded to your account.</p>
             <p className="account-muted">Account deletion is not available in this app yet. Contact the project administrator to request removal of your Neon Auth account and associated community data.</p>
-            <div className="account-actions">
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => signOut().catch((signOutError) => setError(`Could not sign out: ${signOutError.message}`))}>Sign out</button>
-            </div>
           </section>
+          <div className="account-actions">
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => signOut().catch((signOutError) => setError(`Could not sign out: ${signOutError.message}`))}>Sign out</button>
+          </div>
         </div>
       )}
     </section>

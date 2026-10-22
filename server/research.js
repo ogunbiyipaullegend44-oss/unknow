@@ -99,6 +99,36 @@ function getTerms(question) {
   return researchTopicTerms(question, 8);
 }
 
+function getAdditionalResearchAreas(focus) {
+  return [
+    {
+      title: `Historical development and trends in ${focus}`,
+      description: `Trace how ${focus} has changed over time and identify events or shifts that may explain those changes.`,
+      questions: [`How has ${focus} changed over time?`, `Which events or policy changes shaped trends in ${focus}?`],
+    },
+    {
+      title: `Stakeholder experiences and perspectives on ${focus}`,
+      description: `Explore how people directly affected by ${focus} describe their experiences, priorities, and needs.`,
+      questions: [`How do affected people describe their experiences with ${focus}?`, `Whose perspectives are missing from evidence about ${focus}?`],
+    },
+    {
+      title: `Implementation barriers and enabling conditions for ${focus}`,
+      description: `Examine what helps or prevents policies, interventions, or practices related to ${focus} from working in real settings.`,
+      questions: [`What barriers affect implementation of responses to ${focus}?`, `Which conditions help interventions related to ${focus} succeed?`],
+    },
+    {
+      title: `Costs and resource requirements of ${focus}`,
+      description: `Assess the financial, staffing, infrastructure, and other resources needed to address or sustain ${focus}.`,
+      questions: [`What costs or resources are associated with ${focus}?`, `How do resource constraints affect responses to ${focus}?`],
+    },
+    {
+      title: `Trade-offs and unintended effects of ${focus}`,
+      description: `Look for potential trade-offs, unequal consequences, or outcomes that were not the primary goal of actions related to ${focus}.`,
+      questions: [`What unintended effects have been reported for ${focus}?`, `Who may benefit or be disadvantaged by responses to ${focus}?`],
+    },
+  ];
+}
+
 function getResearchAreas(question) {
   const subject = question
     .replace(/^(what|how|why|when|where|which)\s+(is|are|does|do|did|has|have|can|will)\s+/i, '')
@@ -164,7 +194,10 @@ function getResearchAreas(question) {
 
   const profile = profiles.find(({ pattern }) => pattern.test(question));
   if (profile) {
-    return profile.areas.map(([title, description, questions]) => ({ title, description, questions }));
+    return [
+      ...profile.areas.map(([title, description, questions]) => ({ title, description, questions })),
+      ...getAdditionalResearchAreas(focus),
+    ];
   }
 
   const areas = [
@@ -205,7 +238,7 @@ function getResearchAreas(question) {
     });
   }
 
-  return areas.slice(0, 5);
+  return [...areas, ...getAdditionalResearchAreas(focus)];
 }
 
 function getGeographicScope(question, region) {

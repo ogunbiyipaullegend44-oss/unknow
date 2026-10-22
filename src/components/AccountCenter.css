@@ -17,25 +17,6 @@
   line-height: 1.6;
 }
 
-.account-section-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  border-bottom: 1px solid var(--border);
-}
-
-.account-section-tabs button {
-  padding: 10px 12px;
-  border-bottom: 2px solid transparent;
-  color: var(--text-2);
-  font-weight: 600;
-}
-
-.account-section-tabs button[aria-current='page'] {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
 .account-form {
   display: grid;
   gap: 16px;
@@ -189,9 +170,4 @@
     grid-column: auto;
   }
 
-  .account-section-tabs button {
-    padding-right: 8px;
-    padding-left: 8px;
-    font-size: 12px;
-  }
 }

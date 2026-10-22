@@ -33,14 +33,6 @@ function newSavedProjectId() {
     : `project-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 const RESULTS_PER_PAGE = 50;
-const PURPOSES = [
-  ['assignment', 'Assignment'],
-  ['academic', 'Academic research'],
-  ['journalism', 'Journalism or content creation'],
-  ['business', 'Business research'],
-  ['general', 'General knowledge'],
-  ['other', 'Other'],
-];
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -243,15 +235,19 @@ export default function ResearchDiscovery({
   const [filterToolsOpen, setFilterToolsOpen] = useState(false);
   const [dateRange, setDateRange] = useState('any');
   const [sort, setSort] = useState('newest');
-  const [view, setView] = useState('overview');
+  const [view, setView] = useState('discovery');
   const [activePage, setActivePageState] = useState(initialPage);
   const [hasNavigatedFromHome, setHasNavigatedFromHome] = useState(false);
+  const [sourceSearchOpen, setSourceSearchOpen] = useState(false);
   const [resultPageLimit, setResultPageLimit] = useState(RESULTS_PER_PAGE);
   const [selectedResearchArea, setSelectedResearchArea] = useState(null);
   const [researchDefaults, setResearchDefaults] = useState(null);
   const activePageRef = useRef(initialPage);
   const pageHistoryRef = useRef([]);
   const sidebarRef = useRef(null);
+  const sourceSearchToggleRef = useRef(null);
+  const profileButtonRef = useRef(null);
+  const profilePopoverRef = useRef(null);
   const questionInputRef = useRef(null);
   const researchOptionsRef = useRef(null);
   const outsideResearchOptionsClicksRef = useRef(0);
@@ -303,7 +299,7 @@ export default function ResearchDiscovery({
     let active = true;
     setResearchDefaults(null);
     setProfileAvatarUrl('');
-    setDisplayName(user.user_metadata?.display_name?.trim() ?? '');
+    setDisplayName(user.user_metadata?.displayName?.trim() || user.user_metadata?.display_name?.trim() || '');
     neon
       .from('user_profiles')
       .select('display_name, research_preferences, avatar_path')
@@ -317,6 +313,7 @@ export default function ResearchDiscovery({
         }
         setDisplayName(
           data?.display_name?.trim() ||
+          user.user_metadata?.displayName?.trim() ||
           user.user_metadata?.display_name?.trim() ||
           '',
         );
@@ -326,7 +323,9 @@ export default function ResearchDiscovery({
           geographic_focus: saved.geographic_focus ?? 'worldwide',
           region: saved.region ?? '',
           publication_period: saved.publication_period ?? 'any',
-          default_view: saved.default_view ?? 'overview',
+          default_view: ['discovery', 'sources'].includes(saved.default_view)
+            ? saved.default_view
+            : 'discovery',
         };
         setResearchDefaults(defaults);
         setPurposes([defaults.default_purpose]);
@@ -364,6 +363,10 @@ export default function ResearchDiscovery({
   }, [view]);
 
   useEffect(() => {
+    if (view !== 'discovery') setSourceSearchOpen(false);
+  }, [view]);
+
+  useEffect(() => {
     if (!sidebarOpen) return undefined;
 
     const closeOnOutsideClick = (event) => {
@@ -382,6 +385,29 @@ export default function ResearchDiscovery({
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!(event.target instanceof Node)) return;
+      if (
+        profileButtonRef.current?.contains(event.target) ||
+        profilePopoverRef.current?.contains(event.target)
+      ) return;
+      setProfileOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setProfileOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [profileOpen]);
 
   useEffect(() => {
     if (!researchOptionsOpen) return undefined;
@@ -561,14 +587,6 @@ export default function ResearchDiscovery({
     );
   }, [research, selectedResearchArea]);
 
-  const togglePurpose = (value) => {
-    setPurposes((selected) =>
-      selected.includes(value)
-        ? selected.filter((purpose) => purpose !== value)
-        : [...selected, value],
-    );
-  };
-
   const preserveResearchPage = (page) => {
     if (!page) return;
     setResearchPages((pages) => [
@@ -587,7 +605,7 @@ export default function ResearchDiscovery({
     setQuestion('');
     setNotice('');
     setError('');
-    setView('overview');
+    setView('discovery');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     window.setTimeout(() => questionInputRef.current?.focus(), 0);
   };
@@ -602,7 +620,7 @@ export default function ResearchDiscovery({
     setSelectedResearchArea(null);
     setNotice('');
     setError('');
-    setView('overview');
+    setView('discovery');
     setQuery('');
     setDateRange('any');
     setSort('newest');
@@ -620,7 +638,7 @@ export default function ResearchDiscovery({
     setQuestion('');
     setNotice('Research closed. Its saved copy remains available in History.');
     setError('');
-    setView('overview');
+    setView('discovery');
     setQuery('');
     setDateRange('any');
     setSort('newest');
@@ -670,13 +688,14 @@ export default function ResearchDiscovery({
     event?.preventDefault();
     setHasNavigatedFromHome(true);
     setActivePage('research');
-    const effectivePurposes = purposes;
+    const effectivePurposes = purposes.length ? purposes : ['general'];
     const effectiveRegionMode = regionMode;
     const effectiveRegion = region;
     const effectiveDateRange = dateRange;
-    const effectiveView = research
-      ? 'overview'
-      : researchDefaults?.default_view ?? 'overview';
+    const configuredView = researchDefaults?.default_view;
+    const effectiveView = ['discovery', 'sources'].includes(configuredView)
+      ? configuredView
+      : 'discovery';
     const cleanedQuestion = (questionOverride ?? question).trim();
     const currentResearchId = reuseCurrentResearch ? research?.id : null;
     if (!reuseCurrentResearch) {
@@ -693,10 +712,6 @@ export default function ResearchDiscovery({
     setView(effectiveView);
     if (cleanedQuestion.length < 8) {
       setError('Add a little more detail to your question (at least 8 characters).');
-      return;
-    }
-    if (effectivePurposes.length === 0) {
-      setError('Choose at least one research purpose.');
       return;
     }
     if (effectiveRegionMode === 'specific' && !effectiveRegion.trim()) {
@@ -740,7 +755,7 @@ export default function ResearchDiscovery({
       }
       if (!response.ok) {
         const failedStep = result.step === 'discovery'
-          ? 'Source discovery failed'
+          ? 'Source search failed'
           : result.step === 'validation'
             ? 'Question check'
             : 'Research request failed';
@@ -831,7 +846,7 @@ export default function ResearchDiscovery({
     setPurposes(saved.analysis.purposes);
     setError('');
     setNotice('Opened saved research from this browser. Its source list reflects the original search time.');
-    setView('overview');
+    setView('discovery');
     setQuery('');
     setDateRange('any');
     setSort('newest');
@@ -922,7 +937,7 @@ export default function ResearchDiscovery({
     }
     if (destination === 'research') {
       setActivePage('research');
-      setView('overview');
+      setView('discovery');
       return;
     }
     setActivePage(destination);
@@ -1125,6 +1140,7 @@ export default function ResearchDiscovery({
               <button
                 type="button"
                 className="research-sidebar-footer-button"
+                ref={profileButtonRef}
                 aria-label="Profile"
                 aria-expanded={profileOpen}
                 aria-controls="research-sidebar-profile"
@@ -1145,20 +1161,17 @@ export default function ResearchDiscovery({
               </button>
             </div>
             {profileOpen && (
-              <section id="research-sidebar-profile" className="research-sidebar-popover" aria-label="Profile">
+              <section
+                id="research-sidebar-profile"
+                ref={profilePopoverRef}
+                className="research-sidebar-popover"
+                aria-label="Profile"
+              >
                 <strong>{displayName || user?.email || 'Your account'}</strong>
                 <button type="button" onClick={() => openAccountPage('account-profile')}>View Profile</button>
                 <button type="button" onClick={() => openAccountPage('account-settings')}>Settings</button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSavedProjectId(null);
-                    openAccountPage('projects');
-                  }}
-                >
-                  Saved Research
-                </button>
-                <button type="button" onClick={() => openAccountPage('account-security')}>Privacy &amp; Security</button>
+                <button type="button" onClick={() => openAccountPage('account-security')}>Security</button>
+                <button type="button" onClick={() => openAccountPage('account-privacy')}>Privacy &amp; Data</button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1208,14 +1221,16 @@ export default function ResearchDiscovery({
           <main className={`research-main${activePage === 'research' && researchScreen === 'form' ? ' research-main-question' : ''}`}>
         {projectStorageWarning && <p className="discovery-warning" role="status">{projectStorageWarning}</p>}
         {projectActionError && <p className="discovery-warning" role="alert">{projectActionError}</p>}
-        {['account-profile', 'account-settings', 'account-security'].includes(activePage) && (
+        {['account-profile', 'account-settings', 'account-security', 'account-privacy'].includes(activePage) && (
           <AccountCenter
             section={
               activePage === 'account-settings'
                 ? 'settings'
                 : activePage === 'account-security'
                   ? 'security'
-                  : 'profile'
+                  : activePage === 'account-privacy'
+                    ? 'privacy'
+                    : 'profile'
             }
             onSectionChange={setActivePage}
           />
@@ -1278,6 +1293,22 @@ export default function ResearchDiscovery({
             >
               +
             </button>
+            {researchScreen === 'results' && view === 'discovery' && (
+              <button
+                className="discovery-search-toggle research-top-search-toggle"
+                ref={sourceSearchToggleRef}
+                type="button"
+                aria-label={sourceSearchOpen ? 'Close source search' : 'Search sources'}
+                aria-expanded={sourceSearchOpen}
+                aria-controls="source-search-panel"
+                onClick={() => setSourceSearchOpen((open) => !open)}
+              >
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-4-4" />
+                </svg>
+              </button>
+            )}
           </div>
         )}
 
@@ -1386,21 +1417,6 @@ export default function ResearchDiscovery({
                 </div>
               </fieldset>
 
-              <fieldset className="purpose-fieldset">
-                <legend>What are you researching this for?</legend>
-                <div className="purpose-options">
-                  {PURPOSES.map(([value, label]) => (
-                    <label className="purpose-option" key={value}>
-                      <input
-                        type="checkbox"
-                        checked={purposes.includes(value)}
-                        onChange={() => togglePurpose(value)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
             </div>
           </details>
           <label htmlFor="research-question">
@@ -1466,7 +1482,6 @@ export default function ResearchDiscovery({
           <section className="research-results" aria-labelledby="results-heading">
             <div className="research-results-header">
               <div>
-                <p className="research-eyebrow">Your research workspace</p>
                 {isEditingResearchQuestion ? (
                   <form
                     className="research-question-edit-form"
@@ -1525,7 +1540,7 @@ export default function ResearchDiscovery({
                   </>
                 )}
                 <p className="research-retrieved">
-                  Search run {new Date(research.retrievedAt).toLocaleString()} · {research.providers.join(' + ')}
+                  Search run {new Date(research.retrievedAt).toLocaleString()}
                 </p>
                 {research.parentProjectId && (
                   <p className="research-parent-link">
@@ -1546,9 +1561,6 @@ export default function ResearchDiscovery({
             </div>
 
             <nav className="research-tabs" aria-label="Research sections">
-              <button type="button" aria-current={view === 'overview' ? 'page' : undefined} onClick={() => setView('overview')}>
-                Research Map
-              </button>
               <button
                 type="button"
                 aria-current={view === 'discovery' ? 'page' : undefined}
@@ -1558,27 +1570,27 @@ export default function ResearchDiscovery({
                   setView('discovery');
                 }}
               >
-                Source discovery ({research.sources.length + (research.webSources ?? []).length + (research.videos ?? []).length})
+                Sources ({research.sources.length + (research.webSources ?? []).length + (research.videos ?? []).length})
               </button>
               <button
                 type="button"
                 aria-current={view === 'related-topics' ? 'page' : undefined}
                 onClick={() => setView('related-topics')}
               >
-                Related topics ({research.analysis.researchAreas.length})
+                Related ({research.analysis.researchAreas.length})
               </button>
               <button type="button" aria-current={view === 'videos' ? 'page' : undefined} onClick={() => setView('videos')}>
-                Video discovery ({(research.videos ?? []).length})
+                Video ({(research.videos ?? []).length})
               </button>
               <button type="button" aria-current={view === 'claims' ? 'page' : undefined} onClick={() => setView('claims')}>
                 Claims and evidence
               </button>
               <button type="button" aria-current={view === 'research-gaps' ? 'page' : undefined} onClick={() => setView('research-gaps')}>
-                Potential evidence gaps
+                Explore
               </button>
               {selectedResearchArea && (
                 <button type="button" aria-current={view === 'gap' ? 'page' : undefined} onClick={() => setView('gap')}>
-                  Gap matches ({gapMatches.length})
+                  Area sources ({gapMatches.length})
                 </button>
               )}
             </nav>
@@ -1586,24 +1598,23 @@ export default function ResearchDiscovery({
             {view === 'related-topics' ? (
               <RelatedTopics
                 research={research}
-                onInvestigate={(suggestedQuestion, sourceCategory = '') => {
-                  const sourceCategories = sourceCategory ? [sourceCategory] : [];
-                  setQuestion(suggestedQuestion);
-                  startResearch(null, suggestedQuestion, {
-                    parentResearch: research,
-                    sourceCategories,
-                  });
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
               />
             ) : view === 'claims' ? (
               <ClaimEvidence research={research} />
             ) : view === 'research-gaps' ? (
               <ResearchGaps
                 research={research}
+                onOpenArea={(areaTitle) => {
+                  const area = research.analysis.researchAreas.find((item) => item.title === areaTitle);
+                  if (!area) return;
+                  setSelectedResearchArea(area);
+                  setView('gap');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 onUseSearch={(suggestedSearch) => {
                   setQuestion(suggestedSearch);
-                  setView('overview');
+                  setResearchScreen('form');
+                  setResearchOptionsOpen(false);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                   window.setTimeout(() => questionInputRef.current?.focus(), 250);
                 }}
@@ -1611,6 +1622,9 @@ export default function ResearchDiscovery({
             ) : view === 'discovery' ? (
               <SourceDiscovery
                 research={research}
+                sourceSearchOpen={sourceSearchOpen}
+                onCloseSourceSearch={setSourceSearchOpen}
+                sourceSearchToggleRef={sourceSearchToggleRef}
                 savedProjects={savedProjects}
                 projectStorageWarning={projectStorageWarning}
                 projectActionError={projectActionError}
@@ -1619,76 +1633,11 @@ export default function ResearchDiscovery({
                 onFindSimilar={(title) => {
                   const similarQuery = `Related sources for: ${title}`;
                   setQuestion(similarQuery);
-                  setView('overview');
+                  setView('research-gaps');
                   startResearch(null, similarQuery);
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
               />
-            ) : view === 'overview' ? (
-              <div className="research-overview">
-                <section className="analysis-card">
-                  <div className="analysis-card-title">
-                    <h3>Question overview</h3>
-                    <span title="This is a rule-based outline, not AI analysis.">{research.analysis.method}</span>
-                  </div>
-                  <dl className="analysis-grid">
-                    <div><dt>Topic</dt><dd>{research.analysis.mainSubject}</dd></div>
-                    <div><dt>Geography</dt><dd>{research.analysis.geographicScope}</dd></div>
-                    <div><dt>Time period</dt><dd>{research.analysis.timePeriod}</dd></div>
-                    <div><dt>Purpose</dt><dd>{research.analysis.purposes.map((purpose) => PURPOSES.find(([key]) => key === purpose)?.[1] ?? purpose).join(', ') || 'Not selected'}</dd></div>
-                  </dl>
-                  <div className="keyword-list">
-                    <strong>Search terms</strong>
-                    {research.analysis.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}
-                  </div>
-                </section>
-
-                <div className="research-map-heading">
-                  <div>
-                    <h3>Possible gaps and areas to explore</h3>
-                    <p>These are prompts generated from your wording, not confirmed research gaps. Expand an area to see matching sources and videos already found in this search.</p>
-                  </div>
-                </div>
-                <div className="research-area-list">
-                  {research.analysis.researchAreas.map((area, index) => (
-                      <details className="research-area" key={area.title} open={index === 0}>
-                        <summary>
-                          <span className="research-area-number">{String(index + 1).padStart(2, '0')}</span>
-                          <span>{area.title}</span>
-                        </summary>
-                        <div className="research-area-content">
-                          <p>{area.description}</p>
-                          <strong>Questions to explore</strong>
-                          <ul>{area.questions.map((item) => <li key={item}>{item}</li>)}</ul>
-                          <button className="btn btn-ghost" type="button" onClick={() => setView('discovery')}>
-                            <Icon name="search" size={15} />
-                            Explore the source list
-                          </button>
-                          <button
-                            className="btn btn-ghost"
-                            type="button"
-                            onClick={() => {
-                              setSelectedResearchArea(area);
-                              setView('gap');
-                              setQuery('');
-                              setDateRange('any');
-                            }}
-                          >
-                            Check matching sources from this search
-                          </button>
-                        </div>
-                      </details>
-                  ))}
-                </div>
-
-                <section className="research-limits">
-                  <h3>Scope and limitations</h3>
-                  <ul>
-                    {research.analysis.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
-                    <li>Catalog records and abstracts are not the same as reading the full source.</li>
-                  </ul>
-                </section>
-              </div>
             ) : view === 'gap' ? (
               <div className="source-explorer">
                 <div className="source-filter-panel">
@@ -2045,7 +1994,7 @@ export default function ResearchDiscovery({
                           </li>
                         ))}
                       </ul>
-                    ) : <p className="research-history-empty">No sources yet. Add sources from Source Discovery.</p>}
+                    ) : <p className="research-history-empty">No sources yet. Add sources from Sources.</p>}
                   </>
                 );
               })()
@@ -2083,7 +2032,7 @@ export default function ResearchDiscovery({
                       </li>
                     ))}
                   </ul>
-                ) : <p className="research-history-empty">No projects yet. Create one above, or save a source from Source Discovery into a new project.</p>}
+                ) : <p className="research-history-empty">No projects yet. Create one above, or save a source from Sources into a new project.</p>}
               </>
             )}
           </section>

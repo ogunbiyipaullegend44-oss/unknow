@@ -199,15 +199,30 @@ test('research map areas adapt their prompts to the question domain', () => {
   const health = analyzeQuestion('How does air pollution affect asthma rates in Nairobi?', ['academic']);
   const technology = analyzeQuestion('How does artificial intelligence affect hiring decisions?', ['academic']);
 
+  assert.ok(health.researchAreas.length > 4);
+  assert.ok(technology.researchAreas.length > 4);
   assert.ok(health.researchAreas.some((area) => /risk factors and exposure/i.test(area.title)));
   assert.ok(health.researchAreas.some((area) => /prevention, diagnosis, and care/i.test(area.title)));
   assert.ok(health.researchAreas.every((area) => area.questions.every((question) => /asthma|air pollution/i.test(question))));
   assert.ok(technology.researchAreas.some((area) => /adoption and use/i.test(area.title)));
   assert.ok(technology.researchAreas.some((area) => /governance, privacy, and accountability/i.test(area.title)));
+  assert.ok(health.researchAreas.some((area) => /stakeholder experiences/i.test(area.title)));
+  assert.ok(technology.researchAreas.some((area) => /unintended effects/i.test(area.title)));
   assert.notDeepEqual(
     health.researchAreas.map((area) => area.title),
     technology.researchAreas.map((area) => area.title),
   );
+});
+
+test('general research questions receive additional avenues beyond the core research map areas', () => {
+  const plan = analyzeQuestion('How do public libraries support adult literacy?', ['general']);
+  const titles = plan.researchAreas.map(({ title }) => title);
+
+  assert.ok(plan.researchAreas.length > 4);
+  assert.equal(new Set(titles).size, titles.length);
+  assert.ok(plan.researchAreas.every(({ description, questions }) => description && questions.length >= 2));
+  assert.ok(plan.researchAreas.some(({ title }) => /historical development/i.test(title)));
+  assert.ok(plan.researchAreas.some(({ title }) => /costs and resource requirements/i.test(title)));
 });
 
 test('geographic scope avoids reporting a region and its parent as separate places', () => {

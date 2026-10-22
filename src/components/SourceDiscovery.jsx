@@ -6,7 +6,6 @@ import {
   SOURCE_CATEGORIES,
 } from './sourceCategories.js';
 import {
-  ACCESSIBILITY_TYPES,
   assessQuestionContext,
   compileSourceFilters,
   DATE_FILTERS,
@@ -174,8 +173,20 @@ function classifyItems(research) {
   });
 }
 
+function topicOverview(research) {
+  const subject = (research.analysis?.mainSubject || research.question)
+    .replace(/^(what|how|why|when|where|which)\s+(is|are|does|do|did|has|have|can|will)\s+/i, '')
+    .replace(/[?!.]+$/g, '')
+    .trim();
+  if (!subject) return '';
+  return `This topic examines ${subject}. It covers the relevant context, affected people and places, associated outcomes, and the evidence or responses that help explain the issue.`;
+}
+
 export default function SourceDiscovery({
   research,
+  sourceSearchOpen = false,
+  onCloseSourceSearch,
+  sourceSearchToggleRef,
   savedProjects = [],
   projectStorageWarning,
   projectActionError,
@@ -186,6 +197,7 @@ export default function SourceDiscovery({
   const [sourceReviews, setSourceReviews] = useState({});
   const [excludedIds, setExcludedIds] = useState(() => new Set());
   const [comparedIds, setComparedIds] = useState(() => new Set());
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [categoryPages, setCategoryPages] = useState({});
   const [filters, setFilters] = useState(() => ({
     ...INITIAL_FILTERS,
@@ -200,7 +212,52 @@ export default function SourceDiscovery({
   const [creatingProject, setCreatingProject] = useState(savedProjects.length === 0);
   const deferredFilters = useDeferredValue(filters);
   const filterDrawerRef = useRef(null);
+  const sourceSearchInputRef = useRef(null);
+  const sourceSearchPanelRef = useRef(null);
   const previousResearch = useRef(research);
+
+  useEffect(() => {
+    if (sourceSearchOpen) sourceSearchInputRef.current?.focus();
+  }, [sourceSearchOpen]);
+
+  useEffect(() => {
+    if (!sourceSearchOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (
+        !sourceSearchToggleRef.current?.contains(event.target) &&
+        !sourceSearchPanelRef.current?.contains(event.target)
+      ) {
+        onCloseSourceSearch?.(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onCloseSourceSearch?.(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [sourceSearchOpen, onCloseSourceSearch, sourceSearchToggleRef]);
+
+  useEffect(() => {
+    if (!filterDrawerOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!filterDrawerRef.current?.contains(event.target)) {
+        filterDrawerRef.current.open = false;
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') filterDrawerRef.current.open = false;
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [filterDrawerOpen]);
 
   useEffect(() => {
     try {
@@ -355,9 +412,6 @@ export default function SourceDiscovery({
   const availableOrganizations = [...new Set(classifiedItems.flatMap((item) => item.organizationTypes))];
   const availableEvidence = [...new Set(classifiedItems.flatMap((item) => item.evidenceTypes))];
   const dateLimitedCount = items.filter((item) => !item.date).length;
-  const geographyTextMissingCount = items.filter((item) =>
-    ![item.title, item.description, item.abstract].filter(Boolean).join(' '),
-  ).length;
   const organizationMetadataMissingCount = items.filter((item) =>
     !item.organization && !item.publisher && !item.author,
   ).length;
@@ -370,41 +424,56 @@ export default function SourceDiscovery({
 
   return (
     <div className="discovery-workspace">
-      <div className="discovery-heading">
-        <div>
-          <h3>Source discovery</h3>
-          <p>Question relevance checks retrieved source text, not just the title or publisher. A transparent sentence-level rule looks for multiple question concepts together; this is not AI or a guarantee that the source answers the question.</p>
-        </div>
-        <div className="discovery-heading-actions">
-          <span>{availableItems.length.toLocaleString()} of {items.length.toLocaleString()} retrieved sources match your filters. Use the page controls below to browse each category.</span>
+      <section className="source-result-overview" aria-labelledby="source-result-overview-title">
+        <h3 id="source-result-overview-title">Topic overview</h3>
+        <p>{topicOverview(research)}</p>
+      </section>
+
+      <div
+        id="source-search-panel"
+        ref={sourceSearchPanelRef}
+        className={`discovery-search-panel${sourceSearchOpen ? ' is-open' : ''}`}
+        aria-hidden={!sourceSearchOpen}
+      >
+        <div className="discovery-search-panel-content">
+          <label className="filter-search-field discovery-search-field">
+            <span>Search source titles and descriptions</span>
+            <input
+              ref={sourceSearchInputRef}
+              tabIndex={sourceSearchOpen ? 0 : -1}
+              value={filters.search}
+              onChange={(event) => {
+                const value = event.target.value;
+                setFilters((current) => ({ ...current, search: value }));
+                if (value.trim() && filterDrawerRef.current) filterDrawerRef.current.open = true;
+              }}
+              placeholder="Search within retrieved sources"
+            />
+          </label>
         </div>
       </div>
 
-      <p className="discovery-integrity-note">
-        Relevance is a rule-based context screen applied to retrieved abstracts, snippets, or provider-extracted page text when available. It is not a semantic AI review. Titles alone cannot qualify a source; limited or missing text may exclude relevant sources. Open the original source to verify context and claims.
-      </p>
-      <p className="comparison-instructions">
-        Select at least 2 sources to compare their retrieved metadata and text. Up to {MAX_COMPARE_SOURCES} sources can be compared at once; unavailable details are marked rather than inferred.
-        {research.scope?.sourceLimit === 'all' && ' Unlimited searches start with one page per catalog; each category shows 12 records at a time so large collections stay responsive.'}
-        {comparedItems.length > 0 ? ` ${comparedItems.length} selected.` : ''}
-      </p>
+      {comparedItems.length > 0 && (
+        <p className="comparison-instructions">{comparedItems.length} source{comparedItems.length === 1 ? '' : 's'} selected for comparison.</p>
+      )}
       {reviewStorageWarning && <p className="discovery-warning" role="status">{reviewStorageWarning}</p>}
       {notice && <p className="discovery-notice" role="status">{notice}</p>}
 
-      <label className="filter-search-field discovery-search-field">
-        <span>Search source titles and descriptions</span>
-        <input
-          value={filters.search}
-          onChange={(event) => {
-            const value = event.target.value;
-            setFilters((current) => ({ ...current, search: value }));
-            if (value.trim() && filterDrawerRef.current) filterDrawerRef.current.open = true;
+      {filterDrawerOpen && (
+        <button
+          className="source-filter-backdrop"
+          type="button"
+          aria-label="Close source filters"
+          onClick={() => {
+            if (filterDrawerRef.current) filterDrawerRef.current.open = false;
           }}
-          placeholder="Search within retrieved sources"
         />
-      </label>
-
-      <details className="source-filter-drawer" ref={filterDrawerRef}>
+      )}
+      <details
+        className="source-filter-drawer"
+        ref={filterDrawerRef}
+        onToggle={(event) => setFilterDrawerOpen(event.currentTarget.open)}
+      >
         <summary>
           <span>Source filters</span>
           <span>{filterChips.length ? `${filterChips.length} active` : 'No filters applied'}</span>
@@ -492,7 +561,6 @@ export default function SourceDiscovery({
                   <input value={filters.geographyValue} onChange={(event) => setFilters((current) => ({ ...current, geographyValue: event.target.value }))} placeholder={filters.geographyType === 'country' ? 'e.g. Kenya' : filters.geographyType === 'continent' ? 'e.g. Africa' : 'e.g. West Africa or Nairobi'} />
                 </label>
               )}
-              <p className="filter-limitation">Geography checks for the entered text only in titles, abstracts, and descriptions, not publisher location. It signals a text mention, not verified geographic relevance. {geographyTextMissingCount > 0 ? `${geographyTextMissingCount} source${geographyTextMissingCount === 1 ? ' has' : 's have'} no searchable descriptive text.` : ''}</p>
             </fieldset>
 
             <fieldset className="filter-section">
@@ -531,36 +599,12 @@ export default function SourceDiscovery({
                 ))}
               </div>
               {evidenceMetadataMissingCount > 0 && <p className="filter-limitation">{evidenceMetadataMissingCount} record{evidenceMetadataMissingCount === 1 ? ' has' : 's have'} too little description or type metadata to classify.</p>}
-              <p className="filter-limitation">Primary/secondary labels are conservative indicators from record text (for example, a dataset or explicit review); source role cannot be established without reading the work.</p>
-            </fieldset>
-
-            <fieldset className="filter-section">
-              <legend>Accessibility <small>(known indicators only)</small></legend>
-              <div className="filter-checkbox-list">
-                {ACCESSIBILITY_TYPES.map((type) => {
-                  const available = items.some((item) => {
-                    if (type === 'Open-access full-text link') return Boolean(item.openAccessUrl);
-                    if (type === 'Abstract available') return Boolean(item.abstract);
-                    if (type === 'Metadata only') return !item.abstract && !item.description;
-                    if (type === 'Video available') return item.kind === 'video';
-                    return /\.pdf(?:$|[?#])/i.test(item.openAccessUrl ?? '');
-                  });
-                  return (
-                    <label key={type} className={available ? '' : 'filter-unavailable'}>
-                      <input type="checkbox" checked={filters.accessibility.includes(type)} disabled={!available} onChange={() => toggleFilterValue('accessibility', type)} />
-                      <span>{type}</span>
-                      {!available && <small>not found in retrieved records</small>}
-                    </label>
-                  );
-                })}
-              </div>
-              <p className="filter-limitation">A visible title or abstract does not mean the full text is open. “Open access” is applied only when a provider returned a full-text link.</p>
             </fieldset>
 
             <fieldset className="filter-section">
               <legend>Research relevance</legend>
               <label className="filter-inline-label">
-                <span>Research Map area</span>
+                <span>Explore area</span>
                 <select value={filters.researchArea} onChange={(event) => setFilters((current) => ({ ...current, researchArea: event.target.value }))}>
                   <option value="">Any area</option>
                   {research.analysis.researchAreas.map((area) => <option key={area.title} value={area.title}>{area.title}</option>)}
@@ -574,7 +618,6 @@ export default function SourceDiscovery({
                 <span>Question or topic relevance</span>
                 <input value={filters.relevanceQuestion} onChange={(event) => setFilters((current) => ({ ...current, relevanceQuestion: event.target.value }))} placeholder="Require words from this question or topic" />
               </label>
-              <p className="filter-limitation">Area and question matching use words in actual source titles, abstracts, or descriptions, not hidden ranking scores. Claim matching requires the exact phrase in retrieved text and does not verify the claim.</p>
             </fieldset>
 
             <fieldset className="filter-section">
@@ -587,7 +630,6 @@ export default function SourceDiscovery({
                 <span>Exclude phrases <small>(any match removes source)</small></span>
                 <input value={filters.excludeKeywords} onChange={(event) => setFilters((current) => ({ ...current, excludeKeywords: event.target.value }))} placeholder="e.g. opinion, correction" />
               </label>
-              <p className="filter-limitation">Keyword filters search only retrieved title, description, abstract, author, and publisher metadata.</p>
             </fieldset>
           </div>
 
@@ -704,7 +746,7 @@ export default function SourceDiscovery({
                   <span>{sourceDateLabel(item.date)}</span>
                 </div>
                 <h3>{item.title}</h3>
-                <details className="discovery-details">
+                <details className="discovery-details" name="source-details">
                   <summary>Details</summary>
                   <dl className="discovery-metadata">
                     <div><dt>Author / organization</dt><dd>{item.author || 'Not available'}</dd></div>
@@ -721,28 +763,12 @@ export default function SourceDiscovery({
                     <div><dt>Full-text availability</dt><dd>{item.openAccessUrl ? 'A catalog-provided full-text link is available; full text was not fetched' : item.openAccess ? 'Catalog marks this record open access; full text was not fetched' : 'Not determined from retrieved metadata'}</dd></div>
                     <div><dt>Original URL</dt><dd className="discovery-url"><a href={item.url} target="_blank" rel="noopener noreferrer">{item.url}</a></dd></div>
                   </dl>
-                  <div className="discovery-relevance">
-                    <strong>Question context check</strong>
-                    <p>
-                      {item.contextReview.status === 'context-supported'
-                        ? `${item.contextReview.matchedTerms.length} of ${item.contextReview.totalTerms} topic concepts appear together in retrieved content. This is a rule-based context signal, not proof that the source answers the question.`
-                        : item.contextReview.status === 'no-content'
-                          ? 'No source description, abstract, or provider-extracted text was available to check. A title match alone is not enough.'
-                          : `Only ${item.contextReview.matchedTerms.length} of ${item.contextReview.totalTerms} topic concepts appeared together in one retrieved-content sentence; this did not meet the context-screen threshold.`}
-                    </p>
-                    {item.contextReview.supportingSentence && (
-                      <blockquote>{item.contextReview.supportingSentence}</blockquote>
-                    )}
-                    <p>Returned by {item.provider} for “{item.query}”. Check the original source before relying on it.</p>
-                    <strong>Possible research area</strong>
-                    <p>{item.possibleResearchArea || 'Not automatically identified'}</p>
-                  </div>
                   {item.description && (
                     <p className="discovery-description">{item.description}</p>
                   )}
                   {item.evidence ? (
                     <details className="source-abstract">
-                      <summary>{item.rawContent ? 'View provider-extracted page text (not independently verified)' : 'View retrieved abstract or snippet (not full text)'}</summary>
+                      <summary>Abstract</summary>
                       <p>{item.evidence}</p>
                     </details>
                   ) : (
@@ -751,7 +777,6 @@ export default function SourceDiscovery({
                   <section className="source-review-checklist" aria-label={`Independent review of ${item.title}`}>
                     <div>
                       <h4>Independent source check</h4>
-                      <p>The app has not verified this source. Review the original before assessing its content.</p>
                     </div>
                     <label className="source-review-checkbox">
                       <input

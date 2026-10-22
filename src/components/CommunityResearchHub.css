@@ -85,6 +85,24 @@
   font: inherit;
 }
 
+.community-password-field {
+  position: relative;
+  display: block;
+}
+
+.community-password-field input {
+  padding-right: 72px;
+}
+
+.community-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  transform: translateY(-50%);
+}
+
 .community-auth-form {
   display: grid;
   gap: 13px;

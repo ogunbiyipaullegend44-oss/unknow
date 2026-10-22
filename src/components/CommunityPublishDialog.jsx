@@ -94,7 +94,7 @@ export default function CommunityPublishDialog({ file, publication: publicationP
         documentContent: content,
       };
       validatePublicationDraft(payload);
-      const authorName = user.user_metadata?.display_name?.trim() || user.email?.split('@')[0] || 'Community member';
+      const authorName = user.user_metadata?.displayName?.trim() || user.user_metadata?.display_name?.trim() || user.email?.split('@')[0] || 'Community member';
       const attachmentKey = await uploadPublicationDocument(content);
       let saved;
       try {

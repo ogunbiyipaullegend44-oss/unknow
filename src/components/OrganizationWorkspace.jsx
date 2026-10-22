@@ -784,7 +784,7 @@ export default function OrganizationWorkspace({
         <section className="organization-panel">
           <div className="organization-panel-heading"><div><h2>Evidence and findings</h2><p>Sentence excerpts selected from retrieved descriptions and abstracts by wording overlap.</p></div><div className="organization-actions"><button type="button" className="btn btn-secondary" onClick={() => onNavigateResearch('claims')}>Open claim register</button><button type="button" className="btn btn-primary" onClick={() => onNavigateResearch('file-builder')}>Build a research file</button></div></div>
           <p className="organization-callout">These excerpts come from the current search, active project sources, and saved research files. They are not independently verified claims; summaries may omit context, qualifications, and contrary evidence.</p>
-          <p className="organization-muted">Compare sources and record source review status or notes in Source discovery.</p>
+          <p className="organization-muted">Compare sources and record source review status or notes in Sources.</p>
           <button type="button" className="btn btn-ghost" onClick={() => onNavigateResearch('discovery')}>Review and compare sources</button>
           {dashboardFindings.length ? dashboardFindings.map((finding) => (
             <article className="organization-finding-card" key={finding.id}><blockquote>{finding.text}</blockquote><a href={finding.url} target="_blank" rel="noopener noreferrer">{finding.sourceTitle}</a><small>{finding.limitation}</small></article>
