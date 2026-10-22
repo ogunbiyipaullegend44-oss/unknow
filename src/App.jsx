@@ -16,7 +16,7 @@ export default function App() {
   if (!loaded) {
     return (
       <main className="app-loading" role="status" aria-live="polite">
-        Loading ATTIS Researcher…
+        Loading Brinfolynk…
       </main>
     );
   }

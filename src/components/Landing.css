@@ -28,97 +28,36 @@
   margin-bottom: 28px;
 }
 
-.landing-start-research {
-  margin-top: 18px;
+.landing-brand-lockup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
 }
 
 .landing-logo {
-  width: 76px;
-  height: 76px;
-  border-radius: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  color: #fff;
-  margin-bottom: 18px;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: 15px;
+  object-fit: contain;
+  background: #fff;
   box-shadow: var(--shadow-lg);
 }
 
 .landing-title {
-  margin: 0 0 8px;
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.landing-greeting {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-}
-
-.landing-greeting .landing-title {
   margin: 0;
-}
-
-.landing-name-edit {
-  padding: 3px 5px;
-  color: var(--text-2);
-  font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.landing-name-edit:hover {
-  color: var(--accent);
-}
-
-.landing-tagline {
-  margin: 8px 0 0;
-  color: var(--text-2);
-  font-size: 15px;
-  max-width: 460px;
-}
-
-.landing-name-form {
-  display: grid;
-  gap: 7px;
-  width: min(100%, 360px);
-  margin: 16px auto 0;
-  text-align: left;
-}
-
-.landing-name-form label {
-  color: var(--text-1);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.landing-name-form > div {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.landing-name-form input {
-  min-width: 0;
-  min-height: 40px;
-}
-
-.landing-name-form .btn {
-  min-height: 40px;
-  padding: 8px 12px;
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .landing-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   width: 100%;
-  max-width: 1120px;
+  max-width: 760px;
 }
 
 .landing-tool-card {
@@ -300,8 +239,14 @@
 }
 
 @media (max-width: 640px) {
-  .landing-content {
-    justify-content: flex-start;
+  .landing-brand-lockup {
+    gap: 10px;
+  }
+
+  .landing-logo {
+    width: 54px;
+    height: 54px;
+    flex-basis: 54px;
   }
 
   .landing-tools {
