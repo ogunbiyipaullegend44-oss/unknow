@@ -37,7 +37,7 @@ export default function Welcome() {
 
       {hasOpenedResearch && (
         <div className="welcome-research-screen" hidden={!showResearch}>
-          <ResearchDiscovery onBack={() => setShowResearch(false)} backLabel="" />
+          <ResearchDiscovery onBack={() => setShowResearch(false)} />
         </div>
       )}
     </>

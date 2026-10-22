@@ -1713,6 +1713,32 @@
     flex: 1 0 auto;
   }
 
+  .research-form-stage-home .research-question-input-wrap textarea {
+    min-height: 52px;
+    padding: 12px 52px 12px 16px;
+    border-radius: 26px;
+    line-height: 1.45;
+  }
+
+  .research-main-question .research-input-meta {
+    display: none;
+  }
+
+  .research-main-question .research-submit-icon {
+    right: 8px;
+    bottom: 8px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    border-radius: 50%;
+  }
+
+  .research-main-question .research-submit-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
   .research-main-question .research-messages {
     margin-bottom: 0;
   }
@@ -1868,10 +1894,6 @@
     width: 38px;
     height: 38px;
     flex-basis: 38px;
-  }
-
-  .research-back span {
-    font-size: 12px;
   }
 
   .purpose-options {

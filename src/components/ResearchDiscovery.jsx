@@ -195,7 +195,6 @@ function Icon({ name, size = 18 }) {
 
 export default function ResearchDiscovery({
   onBack,
-  backLabel = 'Back',
   initialPage = 'research',
   entryKey,
 }) {
@@ -1199,7 +1198,6 @@ export default function ResearchDiscovery({
                 title="Back"
               >
                 <Icon name="arrow" />
-                {backLabel && <span>{backLabel}</span>}
               </button>
             )}
           </div>
@@ -1418,10 +1416,9 @@ export default function ResearchDiscovery({
               onChange={(event) => {
                 setQuestion(event.target.value);
               }}
-              placeholder="For example: How does access to quality education affect employment in West Africa?"
-              rows={2}
+              rows={1}
               required
-              aria-describedby={research ? 'question-help question-count' : 'question-count'}
+              aria-describedby={research ? 'question-help' : undefined}
             />
             <button
               className="btn btn-primary research-submit research-submit-icon"
@@ -1435,7 +1432,9 @@ export default function ResearchDiscovery({
           </div>
           <div className="research-input-meta">
             {research && <span id="question-help">Update this question and its search settings.</span>}
-            <span id="question-count">{question.length.toLocaleString()} characters</span>
+            {question.length > 0 && (
+              <span id="question-count">{question.length.toLocaleString()} characters</span>
+            )}
           </div>
 
           {research && (
