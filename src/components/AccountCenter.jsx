@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { supabase, supabaseConfigError } from '../community/supabaseClient.js';
+import { deleteAsset, getAvatarUrl, uploadAvatar } from '../neon/assetsClient.js';
+import { neon, neonConfigError } from '../community/neonClient.js';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import CommunityAuthForm from './CommunityAuthForm.jsx';
@@ -63,26 +64,18 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [emailDraft, setEmailDraft] = useState('');
-  const [emailPassword, setEmailPassword] = useState('');
-  const [passwordDraft, setPasswordDraft] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [deletePassword, setDeletePassword] = useState('');
-  const [deleteConfirmation, setDeleteConfirmation] = useState('');
-  const [pendingEmail, setPendingEmail] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
 
   const isAuthenticated = Boolean(user);
   const interestsText = useMemo(() => profile.research_interests.join(', '), [profile.research_interests]);
 
   useEffect(() => {
-    if (!user || !supabase) return undefined;
+    if (!user || !neon) return undefined;
     let active = true;
     setLoadingProfile(true);
     setError('');
     (async () => {
-      const { data, error: profileError } = await supabase
+      const { data, error: profileError } = await neon
         .from('user_profiles')
         .select('*')
         .eq('id', user.id)
@@ -103,17 +96,12 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       setPreferences(nextPreferences);
       initialPreferences.current = nextPreferences;
       if (nextPreferences.theme !== theme) setTheme(nextPreferences.theme);
-      setEmailDraft(user.email ?? '');
-      setPendingEmail(user.new_email ?? '');
       if (data?.avatar_path) {
-        const { data: signed, error: signedError } = await supabase.storage
-          .from('user-avatars')
-          .createSignedUrl(data.avatar_path, 60 * 60);
-        if (signedError) throw signedError;
+        const signedUrl = await getAvatarUrl(data.avatar_path);
         if (active) {
-          setAvatarUrl(signed.signedUrl);
+          setAvatarUrl(signedUrl);
           window.dispatchEvent(new CustomEvent('attis-profile-updated', {
-            detail: { displayName: nextProfile.display_name, avatarUrl: signed.signedUrl },
+            detail: { displayName: nextProfile.display_name, avatarUrl: signedUrl },
           }));
         }
       } else {
@@ -167,21 +155,11 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
     let uploadedAvatarPath = null;
     let profileSaved = false;
     try {
-      if (!supabase || !user) throw new Error(supabaseConfigError || 'Sign in to update your profile.');
+      if (!neon || !user) throw new Error(neonConfigError || 'Sign in to update your profile.');
       if (avatarFile) {
-        const extension = avatarFile.type === 'image/png' ? 'png' :
-          avatarFile.type === 'image/webp' ? 'webp' : 'jpg';
-        newAvatarPath = `${user.id}/${globalThis.crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from('user-avatars')
-          .upload(newAvatarPath, avatarFile, { contentType: avatarFile.type, upsert: false });
-        if (uploadError) throw uploadError;
+        newAvatarPath = await uploadAvatar(avatarFile);
         uploadedAvatarPath = newAvatarPath;
-        const { data: signed, error: signedError } = await supabase.storage
-          .from('user-avatars')
-          .createSignedUrl(newAvatarPath, 60 * 60);
-        if (signedError) throw signedError;
-        uploadedAvatarUrl = signed.signedUrl;
+        uploadedAvatarUrl = await getAvatarUrl(newAvatarPath);
       }
       if (removeAvatar) newAvatarPath = null;
       const nextProfile = {
@@ -193,7 +171,7 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
         research_purpose: String(form.get('research_purpose') ?? 'general'),
         bio,
       };
-      const { error: saveError } = await supabase
+      const { error: saveError } = await neon
         .from('user_profiles')
         .upsert(nextProfile, { onConflict: 'id' });
       if (saveError) throw saveError;
@@ -217,24 +195,24 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       window.dispatchEvent(new CustomEvent('attis-profile-updated', {
         detail: { displayName, avatarUrl: avatarFile ? uploadedAvatarUrl : removeAvatar ? '' : avatarUrl },
       }));
-      let cleanupWarning = false;
+      let cleanupMessage = '';
       if (previousAvatar && previousAvatar !== newAvatarPath) {
-        const { error: removeError } = await supabase.storage
-          .from('user-avatars')
-          .remove([previousAvatar]);
-        cleanupWarning = Boolean(removeError);
+        try {
+          await deleteAsset(previousAvatar);
+        } catch (cleanupError) {
+          cleanupMessage = cleanupError.message;
+        }
       }
-      setNotice(cleanupWarning
-        ? 'Profile saved, but the previous photo could not be removed.'
+      setNotice(cleanupMessage
+        ? `Profile saved, but the previous photo could not be removed: ${cleanupMessage}`
         : cacheWarning
           ? 'Profile saved, but this browser could not cache your display name.'
           : 'Profile saved.');
     } catch (saveError) {
       if (!profileSaved && uploadedAvatarPath) {
-        const { error: cleanupError } = await supabase.storage
-          .from('user-avatars')
-          .remove([uploadedAvatarPath]);
-        if (cleanupError) {
+        try {
+          await deleteAsset(uploadedAvatarPath);
+        } catch (cleanupError) {
           setError(`Could not save your profile: ${saveError.message}. The uploaded photo also could not be cleaned up: ${cleanupError.message}`);
           return;
         }
@@ -256,10 +234,9 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
     setBusy(true);
     setError('');
     setNotice('');
-    let accountDeleted = false;
     try {
-      if (!supabase || !user) throw new Error(supabaseConfigError || 'Sign in to save preferences.');
-      const { error: saveError } = await supabase.from('user_profiles').upsert({
+      if (!neon || !user) throw new Error(neonConfigError || 'Sign in to save preferences.');
+      const { error: saveError } = await neon.from('user_profiles').upsert({
         id: user.id,
         display_name: profile.display_name,
         username: profile.username || null,
@@ -275,103 +252,6 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       setNotice('Settings saved. They will be used for future research.');
     } catch (saveError) {
       setError(`Could not save settings: ${saveError.message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changeEmail = async (event) => {
-    event.preventDefault();
-    const nextEmail = emailDraft.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
-      setError('Enter a valid email address.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      if (!supabase || !user?.email) throw new Error('Email changes require an email/password account.');
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: emailPassword,
-      });
-      if (reauthError) throw reauthError;
-      const { error: updateError } = await supabase.auth.updateUser({ email: nextEmail });
-      if (updateError) throw updateError;
-      setPendingEmail(nextEmail);
-      setEmailPassword('');
-      setNotice('Check your email addresses to confirm the change. Your registered email changes after confirmation.');
-    } catch (changeError) {
-      setError(`Could not start the email change: ${changeError.message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changePassword = async (event) => {
-    event.preventDefault();
-    if (passwordDraft.length < 8 || passwordDraft !== passwordConfirm) {
-      setError('Use a password of at least 8 characters and make both entries match.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      if (!supabase || !user?.email) throw new Error('Password changes require an email/password account.');
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: currentPassword,
-      });
-      if (reauthError) throw reauthError;
-      const { error: updateError } = await supabase.auth.updateUser({ password: passwordDraft });
-      if (updateError) throw updateError;
-      setCurrentPassword('');
-      setPasswordDraft('');
-      setPasswordConfirm('');
-      setNotice('Password changed.');
-    } catch (changeError) {
-      setError(`Could not change password: ${changeError.message}`);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const deleteAccount = async (event) => {
-    event.preventDefault();
-    if (deleteConfirmation !== 'DELETE') {
-      setError('Type DELETE to confirm account deletion.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      if (!supabase || !user?.email) throw new Error('Account deletion requires an email/password account.');
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: deletePassword,
-      });
-      if (reauthError) throw reauthError;
-      if (profile.avatar_path) {
-        const { error: removeError } = await supabase.storage
-          .from('user-avatars')
-          .remove([profile.avatar_path]);
-        if (removeError) throw new Error(`Profile photo cleanup failed: ${removeError.message}`);
-      }
-      const { error: deletionError } = await supabase.rpc('delete_my_account');
-      if (deletionError) throw deletionError;
-      accountDeleted = true;
-      await signOut('local');
-      window.localStorage.removeItem('attis:display-name');
-      window.localStorage.removeItem(`attis:research-preferences:${user.id}`);
-      setNotice('Account deleted. Browser-local research history and saved projects were not deleted.');
-      onSectionChange('profile');
-    } catch (deleteError) {
-      setError(accountDeleted
-        ? `Your account was deleted, but local cleanup or sign-out failed: ${deleteError.message}`
-        : `Account deletion did not complete: ${deleteError.message}`);
     } finally {
       setBusy(false);
     }
@@ -495,7 +375,7 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
         <form className="account-form" onSubmit={savePreferences}>
           <section className="account-card">
             <h2>Appearance</h2>
-            <p>Choose how ATTIS looks on this device. System appearance follows your operating-system setting.</p>
+            <p>Choose how Brinfolynk looks on this device. System appearance follows your operating-system setting.</p>
             <label className="account-field"><span>Theme</span>
               <select value={preferences.theme} onChange={(event) => setPreferences({ ...preferences, theme: event.target.value })}>
                 <option value="system">Follow system</option><option value="light">Light mode</option><option value="dark">Dark mode</option>
@@ -541,41 +421,17 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
       {!loadingProfile && section === 'security' && (
         <div className="account-form">
           <section className="account-card">
-            <h2>Change email</h2>
-            <p>Supabase sends confirmation links before a new email becomes active.</p>
-            <form className="account-security-form" onSubmit={changeEmail}>
-              <label><span>New email</span><input type="email" required value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} autoComplete="email" /></label>
-              <label><span>Current password (verify identity)</span><input type="password" required value={emailPassword} onChange={(event) => setEmailPassword(event.target.value)} autoComplete="current-password" /></label>
-              <button className="btn btn-primary" type="submit" disabled={busy}>Request email change</button>
-              {pendingEmail && pendingEmail !== user.email && <p className="account-muted">Confirmation pending for {pendingEmail}.</p>}
-            </form>
-          </section>
-          <section className="account-card">
-            <h2>Change password</h2>
-            <p>Your current password is verified before the new password is saved.</p>
-            <form className="account-security-form" onSubmit={changePassword}>
-              <label><span>Current password</span><input type="password" required value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" /></label>
-              <label><span>New password</span><input type="password" required minLength={8} value={passwordDraft} onChange={(event) => setPasswordDraft(event.target.value)} autoComplete="new-password" /></label>
-              <label><span>Confirm new password</span><input type="password" required minLength={8} value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} autoComplete="new-password" /></label>
-              <button className="btn btn-primary" type="submit" disabled={busy}>Change password</button>
-            </form>
+            <h2>Sign-in credentials</h2>
+            <p>Your account is managed by Neon Auth. This app does not currently support changing the registered email address or password.</p>
+            <p className="account-muted">Registered email: {user.email || 'Unavailable'}</p>
           </section>
           <section className="account-card">
             <h2>Privacy and data</h2>
-            <p>Profile details and profile photos are private to your account. Community publications and related records are removed by the account deletion workflow. Research history, saved collections, and mapping projects currently live in this browser; they are not uploaded to your account and will remain on this device after account deletion.</p>
+            <p>Profile details and profile photos are private to your account. Community publications and related records are shared according to their publication and moderation status. Research history, saved collections, and mapping projects remain in this browser and are not uploaded to your account.</p>
+            <p className="account-muted">Account deletion is not available in this app yet. Contact the project administrator to request removal of your Neon Auth account and associated community data.</p>
             <div className="account-actions">
               <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => signOut().catch((signOutError) => setError(`Could not sign out: ${signOutError.message}`))}>Sign out</button>
-              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => signOut('global').catch((signOutError) => setError(`Could not sign out all sessions: ${signOutError.message}`))}>Sign out all sessions</button>
             </div>
-          </section>
-          <section className="account-card account-danger-zone">
-            <h2>Delete account</h2>
-            <p>This permanently deletes your Supabase account, private profile, profile photo, and associated Community Hub records. Local research history, saved collections, mapping projects, and data held in this browser are not deleted. The app has no separate legal-retention workflow; deletion only removes records covered by the configured database cascades.</p>
-            <form className="account-security-form" onSubmit={deleteAccount}>
-              <label><span>Current password</span><input type="password" required value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} autoComplete="current-password" /></label>
-              <label><span>Type DELETE to confirm</span><input required value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" /></label>
-              <button className="btn btn-danger" type="submit" disabled={busy}>Permanently delete account</button>
-            </form>
           </section>
         </div>
       )}

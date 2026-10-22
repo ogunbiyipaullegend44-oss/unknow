@@ -5,6 +5,7 @@ import {
   deletePublication,
   getMyPublications,
   getMyRating,
+  getPublicationDocument,
   getPublicationReports,
   listCommunityPublications,
   reportPublication,
@@ -178,7 +179,7 @@ export default function CommunityResearchHub() {
         {user && <div className="community-account"><span>{user.user_metadata?.display_name || user.email}</span><button type="button" className="btn btn-ghost" onClick={() => signOut().catch((authError) => setError(authError.message))}>Sign out</button></div>}
       </header>
 
-      {configError ? <div className="community-alert" role="status"><strong>Hub setup required</strong><p>{configError}</p><p>Configure Supabase and apply the migration to enable shared publishing, ratings, and reports.</p></div>
+      {configError ? <div className="community-alert" role="status"><strong>Hub setup required</strong><p>{configError}</p><p>Configure Neon and apply the migration to enable shared publishing, ratings, and reports.</p></div>
         : !user ? <CommunityAuthForm />
           : <>
             {authError && <p className="community-alert" role="alert">{authError}</p>}
@@ -216,6 +217,25 @@ function CommunitySection({ title, description, items, onOpen }) {
 
 function PublicationDetails({ publication, rating, canRate, ratingDraft, onRatingChange, onRate, onReport, reportType, setReportType, reportDetails, setReportDetails, busy, error, notice, related, onOpenRelated, onClose }) {
   const ratings = summarizeRatings(publication);
+  const [documentContent, setDocumentContent] = useState(publication.document_content || '');
+  const [documentLoading, setDocumentLoading] = useState(true);
+  const [documentError, setDocumentError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setDocumentContent(publication.document_content || '');
+    setDocumentLoading(true);
+    setDocumentError('');
+    getPublicationDocument(publication.id).then((content) => {
+      if (active) setDocumentContent(content);
+    }).catch((loadError) => {
+      if (active) setDocumentError(loadError.message || 'The full attachment could not be loaded.');
+    }).finally(() => {
+      if (active) setDocumentLoading(false);
+    });
+    return () => { active = false; };
+  }, [publication.id]);
+
   return (
     <div className="community-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="community-modal community-details-modal" role="dialog" aria-modal="true" aria-labelledby="community-detail-title">
@@ -224,7 +244,10 @@ function PublicationDetails({ publication, rating, canRate, ratingDraft, onRatin
         <h1 id="community-detail-title">{publication.title}</h1>
         <p>{publication.description}</p><p className="community-muted">By {publication.author_name} · {publication.location || 'Location not specified'} · ★ {ratings.count ? `${ratings.average.toFixed(1)} from ${ratings.count} rating(s)` : 'Not yet rated'}</p>
         {publication.keywords?.length > 0 && <div className="community-keywords">{publication.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}</div>}
-        <article className="community-full-document"><pre>{publication.document_content}</pre></article>
+        <article className="community-full-document">
+          {documentLoading ? <p className="community-muted">Loading full research attachment…</p> : <pre>{documentContent}</pre>}
+          {documentError && <p className="community-alert" role="alert">{documentError}</p>}
+        </article>
         <section><h2>Source references</h2>{publication.source_references?.length ? <ol>{publication.source_references.map((source) => <li key={source.url}><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></li>)}</ol> : <p className="community-muted">No source references were supplied.</p>}</section>
         {related.length > 0 && <section><h2>Related research</h2><div className="community-related">{related.map((item) => <button type="button" key={item.id} onClick={() => onOpenRelated(item)}>{item.title}<span>{item.category}</span></button>)}</div></section>}
         <section className="community-rate"><h2>Rate this research</h2>{canRate ? <><div className="community-stars" role="radiogroup" aria-label="Rate from 1 to 5 stars">{[1, 2, 3, 4, 5].map((value) => <button type="button" role="radio" aria-checked={ratingDraft === value} aria-label={`${value} star${value === 1 ? '' : 's'}`} className={value <= ratingDraft ? 'is-selected' : ''} key={value} onClick={() => onRatingChange(value)}>★</button>)}<button type="button" className="btn btn-primary" disabled={!ratingDraft || busy} onClick={onRate}>{rating ? 'Update rating' : 'Submit rating'}</button></div><p className="community-muted">Your rating is private to your account and can be changed later.</p></> : <p className="community-muted">You cannot rate your own publication.</p>}{error && <p className="community-alert" role="alert">{error}</p>}{notice && <p className="community-success" role="status">{notice}</p>}</section>

@@ -1,8 +1,9 @@
-import { supabase } from './supabaseClient.js';
+import { deleteAsset, getPublicationDocument } from '../neon/assetsClient.js';
+import { neon } from './neonClient.js';
 
 function requireClient() {
-  if (!supabase) throw new Error('Community sharing is not configured. Set the Supabase environment variables and restart the app.');
-  return supabase;
+  if (!neon) throw new Error('Community sharing is not configured. Set the Neon environment variables and restart the app.');
+  return neon;
 }
 
 export async function listCommunityPublications({ search = '', category = '', location = '', publishedAfter = '' } = {}) {
@@ -56,6 +57,7 @@ export async function savePublication(userId, fileId, draft) {
       location: draft.location.trim(),
       published_on: draft.published_on,
       document_content: draft.document_content,
+      document_object_key: draft.document_object_key,
       source_references: draft.source_references,
       author_name: draft.author_name.trim(),
       is_published: true,
@@ -78,12 +80,29 @@ export async function setPublicationPublished(publicationId, isPublished) {
 }
 
 export async function deletePublication(publicationId) {
-  const { error } = await requireClient()
+  const client = requireClient();
+  const { data: publication, error: lookupError } = await client
+    .from('community_publications')
+    .select('document_object_key')
+    .eq('id', publicationId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  const { error } = await client
     .from('community_publications')
     .delete()
     .eq('id', publicationId);
   if (error) throw error;
+  if (publication?.document_object_key) {
+    try {
+      await deleteAsset(publication.document_object_key);
+    } catch (cleanupError) {
+      throw new Error(`Publication was removed, but its private attachment could not be deleted: ${cleanupError.message}`);
+    }
+  }
 }
+
+export { getPublicationDocument };
 
 export async function saveRating(publicationId, userId, rating) {
   const { error } = await requireClient()

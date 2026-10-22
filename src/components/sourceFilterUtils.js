@@ -47,13 +47,76 @@ export function questionTerms(value) {
   return researchTopicTerms(value, 10);
 }
 
-export function matchesQuestionRelevance(text, question) {
+function normalizedContextTerm(term) {
+  let normalized = term.toLocaleLowerCase();
+  if (normalized.length > 5 && normalized.endsWith('ies')) return `${normalized.slice(0, -3)}y`;
+  if (normalized.length > 5 && /(ing|ed)$/.test(normalized)) {
+    normalized = normalized.replace(/(ing|ed)$/, '');
+    if (/(.)\1$/.test(normalized)) normalized = normalized.slice(0, -1);
+    return normalized;
+  }
+  if (normalized.length > 4 && normalized.endsWith('s') && !normalized.endsWith('ss')) {
+    return normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+export function assessQuestionContext(text, question) {
   const terms = questionTerms(question);
-  if (!terms.length) return false;
-  const contentTerms = new Set(
-    String(text ?? '').toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? [],
+  const content = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!content) {
+    return {
+      status: 'no-content',
+      relevant: false,
+      matchedTerms: [],
+      totalTerms: terms.length,
+      supportingSentence: '',
+    };
+  }
+  if (!terms.length) {
+    return {
+      status: 'insufficient-context',
+      relevant: false,
+      matchedTerms: [],
+      totalTerms: 0,
+      supportingSentence: '',
+    };
+  }
+
+  const sentences = content.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean) ?? [content];
+  const rankedSentences = sentences.map((sentence, index) => {
+    const sentenceTerms = new Set(
+      (sentence.toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? [])
+        .map(normalizedContextTerm),
+    );
+    const matchedTerms = terms.filter((term) => sentenceTerms.has(normalizedContextTerm(term)));
+    return { sentence, index, matchedTerms };
+  }).sort((left, right) =>
+    right.matchedTerms.length - left.matchedTerms.length || left.index - right.index,
   );
-  return terms.filter((term) => contentTerms.has(term)).length >= Math.min(2, terms.length);
+  const bestSentence = rankedSentences[0];
+  const minimumMatches = Math.min(2, terms.length);
+  const relevant = bestSentence.matchedTerms.length >= minimumMatches &&
+    bestSentence.matchedTerms.length / terms.length >= 0.4;
+  const anyMatches = bestSentence.matchedTerms.length > 0;
+
+  return {
+    status: relevant
+      ? 'context-supported'
+      : anyMatches
+        ? 'partial-context'
+        : 'insufficient-context',
+    relevant,
+    matchedTerms: bestSentence.matchedTerms,
+    totalTerms: terms.length,
+    supportingSentence: relevant ? bestSentence.sentence : '',
+  };
+}
+
+export function matchesQuestionRelevance(text, question) {
+  return assessQuestionContext(text, question).relevant;
 }
 
 export function sourceSearchText(source) {
@@ -62,6 +125,8 @@ export function sourceSearchText(source) {
     source.title,
     source.description,
     source.abstract,
+    source.rawContent,
+    source.fullText,
     source.author,
     source.publisher,
     source.organization,
@@ -71,7 +136,7 @@ export function sourceSearchText(source) {
 
 export function sourceGeographyText(source) {
   if (typeof source.filterGeographyText === 'string') return source.filterGeographyText;
-  return [source.title, source.description, source.abstract]
+  return [source.title, source.description, source.abstract, source.rawContent, source.fullText]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase();
@@ -189,8 +254,6 @@ export function compileSourceFilters(filters, context = {}) {
       .flatMap((term) => term.split(/\s+/))
       .filter((term) => term.length > 3))]
     : [];
-  const relevanceTerms = questionTerms(filters.relevanceQuestion);
-
   return {
     categories: new Set(filters.categories ?? []),
     search: filters.search?.trim().toLocaleLowerCase() ?? '',
@@ -202,7 +265,6 @@ export function compileSourceFilters(filters, context = {}) {
     geographyType: filters.geographyType,
     geographyQuery: filters.geographyValue?.trim().toLocaleLowerCase() ?? '',
     researchAreaTerms,
-    relevanceTerms,
     claim: filters.claim?.trim().toLocaleLowerCase() ?? '',
     datePreset,
     dateStart: filters.startDate ? Date.parse(`${filters.startDate}T00:00:00Z`) : -Infinity,
@@ -282,19 +344,14 @@ export function matchesSourceFilters(source, filters, context = {}, compiled = c
     if (matches < Math.min(2, compiled.researchAreaTerms.length)) return false;
   }
   if (filters.relevanceQuestion) {
-    if (!compiled.relevanceTerms.length) return false;
     const relevanceContent = [
-      source.title,
+      source.rawContent,
+      source.fullText,
       source.description,
       source.abstract,
-      source.publisher,
-      source.organization,
-    ].filter(Boolean).join(' ').toLocaleLowerCase();
-    const contentTerms = new Set(
-      relevanceContent.match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? [],
-    );
-    if (compiled.relevanceTerms.filter((term) => contentTerms.has(term)).length <
-      Math.min(2, compiled.relevanceTerms.length)) return false;
+      source.evidence,
+    ].filter((value) => typeof value === 'string' && value.trim()).join('. ');
+    if (!assessQuestionContext(relevanceContent, filters.relevanceQuestion).relevant) return false;
   }
   if (compiled.claim && !getText().includes(compiled.claim)) return false;
 

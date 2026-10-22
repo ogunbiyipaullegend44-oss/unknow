@@ -62,6 +62,7 @@ function sourceRecords(research, projects) {
       title: source.title,
       url: source.url,
       description: source.description || '',
+      rawContent: source.rawContent || '',
       publisher: sourceHost(source.url),
       category: categoryFor({ ...source, kind: 'web' }),
       date: source.publishedAt || '',
@@ -74,6 +75,7 @@ function sourceRecords(research, projects) {
       title: source.title,
       url: source.url,
       description: source.description || '',
+      rawContent: source.rawContent || '',
       publisher: source.channel || source.platform || '',
       category: 'Videos and YouTube',
       date: source.publishedAt || '',
@@ -904,7 +906,7 @@ export default function OrganizationWorkspace({
       {page === 'team-workspace' && (
         <section className="organization-panel">
           <div className="organization-panel-heading"><div><h2>Team workspace</h2><p>Collaboration integration status</p></div></div>
-          <p className="organization-callout">Community Hub publishing uses Supabase when configured. Projects and reports in this workspace remain in this browser and are not shared; team roles, shared comments, and project synchronization are not enabled.</p>
+          <p className="organization-callout">Community Hub publishing uses Neon when configured. Projects and reports in this workspace remain in this browser and are not shared; team roles, shared comments, and project synchronization are not enabled.</p>
           <p>Member lists, shared comments, project roles, activity synchronization, and privacy controls will need an authenticated server-side workspace before they can be safely enabled.</p>
           <button type="button" className="btn btn-secondary" onClick={() => setTeamNotice('No team service is configured. Your local project data has not been shared.')}>Check connection</button>
           {teamNotice && <p className="organization-muted" role="status">{teamNotice}</p>}

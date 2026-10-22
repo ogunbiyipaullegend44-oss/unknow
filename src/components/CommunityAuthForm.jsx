@@ -34,7 +34,7 @@ export default function CommunityAuthForm({
     }
   };
 
-  if (configError) return <div className="community-alert" role="status"><strong>Community service setup required</strong><p>{configError}</p><p>Apply the included Supabase migration and enable email/password authentication before signing in.</p></div>;
+  if (configError) return <div className="community-alert" role="status"><strong>Community service setup required</strong><p>{configError}</p><p>Configure Neon Auth and apply the included Neon migration before signing in.</p></div>;
 
   return (
     <form className={`community-auth-form${compact ? ' is-compact' : ''}`} onSubmit={submit}>

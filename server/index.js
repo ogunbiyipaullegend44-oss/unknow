@@ -459,6 +459,7 @@ function normalizeTavilyResult(result) {
     id: `tavily:${url}`,
     title,
     description: cleanVideoText(result.content),
+    rawContent: cleanVideoText(result.raw_content, 8000),
     url,
     provider: 'Tavily',
     publishedAt: normalizeWebDate(result.published_date),
@@ -510,6 +511,7 @@ function deduplicateWebSources(sources) {
       ...existing,
       provider: [...providers].join(' and '),
       description: existing.description || source.description,
+      rawContent: existing.rawContent || source.rawContent,
       publishedAt: existing.publishedAt || source.publishedAt,
     });
   }
@@ -581,6 +583,7 @@ async function discoverWebSources(question, fetchImpl, {
         search_depth: 'basic',
         max_results: 20,
         include_answer: false,
+        include_raw_content: true,
         ...(dateRange ? { start_date: dateRange.start, end_date: dateRange.end } : {}),
       }),
     }).then((data) => {

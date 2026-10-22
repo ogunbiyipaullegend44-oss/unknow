@@ -12,10 +12,19 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1155.0",
+    "@aws-sdk/s3-request-presigner": "^3.1155.0",
+    "@neon/config": "^1.9.3",
+    "@neon/env": "^1.6.4",
+    "@neondatabase/functions": "^0.11.0",
+    "@neondatabase/neon-js": "^0.9.0-beta",
     "@supabase/supabase-js": "^2.118.0",
     "@vis.gl/react-google-maps": "^1.8.3",
     "@xyflow/react": "^12.3.5",
+    "hono": "^4.13.13",
+    "jose": "^6.2.13",
     "leaflet": "^1.9.4",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1"

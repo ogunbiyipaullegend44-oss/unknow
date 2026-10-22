@@ -35,6 +35,23 @@ test('related topics stay specific to a non-education research question', () => 
   assert.ok(topics.some((topic) => topic.question.includes('urban air pollution')));
 });
 
+test('related-topic source suggestions adapt to the question domain and topic angle', () => {
+  const environment = getRelatedTopics({
+    question: 'How does urban air pollution affect asthma rates?',
+    analysis: { mainSubject: 'urban air pollution and asthma rates' },
+  });
+  const technology = getRelatedTopics({
+    question: 'How does artificial intelligence affect hiring decisions?',
+    analysis: { mainSubject: 'artificial intelligence and hiring decisions' },
+  });
+
+  assert.ok(environment.some((topic) => topic.categories.includes('Government and Official Sources')));
+  assert.ok(technology.some((topic) => topic.categories.includes('News and Journalism')));
+  assert.ok(environment.find((topic) => topic.id === 'experience').categories.includes('News and Journalism'));
+  assert.ok(technology.find((topic) => topic.id === 'evidence-quality').categories.includes('Books and Other Publications'));
+  assert.notDeepEqual(environment[0].categories, technology[0].categories);
+});
+
 test('related topics are empty when research context is unavailable', () => {
   assert.deepEqual(getRelatedTopics(null), []);
   assert.deepEqual(getRelatedTopics({ question: 'A research topic' }), []);

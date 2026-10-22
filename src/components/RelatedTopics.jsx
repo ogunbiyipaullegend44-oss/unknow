@@ -9,7 +9,7 @@ export default function RelatedTopics({ research, onInvestigate }) {
       <div className="related-topics-heading">
         <div>
           <h3 id="related-topics-heading">Related topics and follow-up questions</h3>
-          <p>Suggestions are based on your research question. Choose a question to search for sources, or choose a source category to narrow that search.</p>
+          <p>Follow-up questions and source types are tailored to your research topic. Choose a question to search for more evidence, or select a source type to record it as a priority for the follow-up.</p>
         </div>
       </div>
 
@@ -40,7 +40,7 @@ export default function RelatedTopics({ research, onInvestigate }) {
               </div>
             </dl>
             <div className="related-topic-categories">
-              <span>Search by source category</span>
+              <span>Suggested source types</span>
               <div>
                 {topic.categories.map((category) => (
                   <button
@@ -58,7 +58,7 @@ export default function RelatedTopics({ research, onInvestigate }) {
         ))}
       </div>
       <p className="related-topics-note">
-        These are research directions, not findings. Source-category choices filter the retrieved records; they do not guarantee that a provider returns that source type.
+        These are research directions, not findings. Source-type choices are saved as priorities; provider availability determines which sources can be retrieved.
       </p>
     </section>
   );

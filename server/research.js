@@ -105,33 +105,107 @@ function getResearchAreas(question) {
     .replace(/[?!.]+$/g, '')
     .trim();
   const focus = subject.length > 110 ? `${subject.slice(0, 107)}...` : subject;
+  const profiles = [
+    {
+      pattern: /\b(health|disease|cancer|medical|medicine|patient|patients|asthma|mental health|public health|epidemic|clinical)\b/i,
+      areas: [
+        [`Risk factors and exposure pathways for ${focus}`, `Identify exposures and risk factors studied in relation to ${focus}.`, [`Which exposures are associated with ${focus}?`, `What evidence separates correlation from causation for ${focus}?`]],
+        [`Health outcomes and affected populations`, `Compare reported outcomes for ${focus} across populations, locations, and time periods.`, [`Which populations have been studied for ${focus}?`, `How do outcomes for ${focus} differ by age, sex, or location?`]],
+        [`Prevention, diagnosis, and care for ${focus}`, `Review interventions and care approaches evaluated for ${focus}, including their reported benefits and limitations.`, [`Which prevention or treatment approaches have been evaluated for ${focus}?`, `What barriers affect access to care for ${focus}?`]],
+        [`Clinical and public-health evidence on ${focus}`, `Assess study designs, sample sizes, and uncertainty in the available evidence about ${focus}.`, [`What study designs support findings about ${focus}?`, `Where is evidence about ${focus} still uncertain?`]],
+      ],
+    },
+    {
+      pattern: /\b(education|school|schools|student|students|teacher|teachers|learning|literacy|university|universities|classroom|curriculum)\b/i,
+      areas: [
+        [`Access and learning outcomes for ${focus}`, `Examine how ${focus} relates to enrollment, attendance, learning, or completion.`, [`Which learning outcomes are measured for ${focus}?`, `Which learners face the greatest barriers related to ${focus}?`]],
+        [`Resources and education policy around ${focus}`, `Compare funding, staffing, facilities, and policies connected to ${focus}.`, [`How do resources or policies shape ${focus}?`, `Do outcomes for ${focus} differ between public and private schools?`]],
+        [`Equity and local experience of ${focus}`, `Explore how experiences of ${focus} vary by income, gender, disability, and location.`, [`Which groups are underrepresented in evidence about ${focus}?`, `How do learners and teachers describe ${focus}?`]],
+        [`Education evidence and assessment for ${focus}`, `Review assessment methods and the limits of available data about ${focus}.`, [`How is ${focus} measured across studies?`, `What data gaps limit comparisons of ${focus}?`]],
+      ],
+    },
+    {
+      pattern: /\b(climate|warming|weather|pollution|air quality|biodiversity|ecosystem|wildlife|deforestation|emissions|environment|flood|drought|wildfire|renewable energy)\b/i,
+      areas: [
+        [`Drivers and exposure patterns for ${focus}`, `Investigate the sources, trends, and exposure patterns relevant to ${focus}.`, [`Which human or natural drivers are linked to ${focus}?`, `How do exposure levels for ${focus} vary by place and season?`]],
+        [`Health, ecosystem, and infrastructure impacts`, `Compare measured impacts of ${focus} on people, ecosystems, and built environments.`, [`What impacts of ${focus} have been measured directly?`, `Which communities or ecosystems are most exposed to ${focus}?`]],
+        [`Mitigation and adaptation responses to ${focus}`, `Review policies and interventions tested to reduce or adapt to ${focus}.`, [`Which responses to ${focus} have demonstrated measurable results?`, `What trade-offs are reported for interventions addressing ${focus}?`]],
+        [`Monitoring and environmental evidence for ${focus}`, `Assess the observations, models, and uncertainty used to study ${focus}.`, [`Which monitoring datasets track ${focus}?`, `How do models and direct observations of ${focus} compare?`]],
+      ],
+    },
+    {
+      pattern: /\b(economy|economic|employment|jobs|wages|income|poverty|inflation|trade|labor|labour|business|industry|market|unemployment)\b/i,
+      areas: [
+        [`Employment and income outcomes for ${focus}`, `Examine effects and associations involving jobs, wages, income, and working conditions.`, [`How does ${focus} relate to employment and wages?`, `Which workers or sectors experience different outcomes from ${focus}?`]],
+        [`Policy and market forces affecting ${focus}`, `Compare policies, market conditions, and institutions connected to ${focus}.`, [`Which policy changes are associated with ${focus}?`, `How do market or industry conditions shape ${focus}?`]],
+        [`Distributional and regional effects of ${focus}`, `Study how the costs and benefits of ${focus} differ across households, sectors, and places.`, [`Who benefits or bears the costs of ${focus}?`, `How do regional effects of ${focus} compare?`]],
+        [`Economic data and methods for ${focus}`, `Review datasets, indicators, and methods used to estimate changes related to ${focus}.`, [`Which indicators best measure ${focus}?`, `What limitations affect economic estimates of ${focus}?`]],
+      ],
+    },
+    {
+      pattern: /\b(technology|artificial intelligence|AI|algorithm|algorithms|automation|digital|internet|social media|platform|cybersecurity|software|robotics)\b/i,
+      areas: [
+        [`Adoption and use of ${focus}`, `Compare who uses ${focus}, how it is adopted, and what barriers affect access.`, [`How is ${focus} adopted across groups or sectors?`, `What prevents people from accessing or using ${focus}?`]],
+        [`Benefits, harms, and outcomes of ${focus}`, `Review measured effects and reported risks of ${focus} in real-world settings.`, [`What benefits of ${focus} have been independently measured?`, `What harms or unintended effects are associated with ${focus}?`]],
+        [`Governance, privacy, and accountability for ${focus}`, `Examine rules, safeguards, and accountability mechanisms applied to ${focus}.`, [`Which regulations or standards govern ${focus}?`, `How are privacy, safety, and accountability handled for ${focus}?`]],
+        [`Technical evaluation and evidence on ${focus}`, `Compare evaluation methods, benchmarks, and limitations in studies of ${focus}.`, [`How is the performance of ${focus} evaluated?`, `Which benchmarks or datasets are used to assess ${focus}?`]],
+      ],
+    },
+    {
+      pattern: /\b(agriculture|farming|farmer|farmers|crop|crops|food security|food supply|livestock|irrigation|soil)\b/i,
+      areas: [
+        [`Production and livelihoods related to ${focus}`, `Explore effects of ${focus} on yields, farm income, and rural livelihoods.`, [`How does ${focus} affect crop or livestock production?`, `Which farming households are most affected by ${focus}?`]],
+        [`Inputs, land, and water in ${focus}`, `Compare land, seed, fertilizer, water, and technology factors connected to ${focus}.`, [`Which inputs are linked to outcomes in ${focus}?`, `How do land and water conditions shape ${focus}?`]],
+        [`Food access and resilience around ${focus}`, `Assess how ${focus} relates to food prices, availability, nutrition, and resilience.`, [`What food-security outcomes are associated with ${focus}?`, `How resilient are communities affected by ${focus}?`]],
+        [`Agricultural data and methods for ${focus}`, `Review field studies, production data, and measurement limits relevant to ${focus}.`, [`Which datasets track ${focus}?`, `How comparable are agricultural studies of ${focus}?`]],
+      ],
+    },
+  ];
+
+  const profile = profiles.find(({ pattern }) => pattern.test(question));
+  if (profile) {
+    return profile.areas.map(([title, description, questions]) => ({ title, description, questions }));
+  }
+
   const areas = [
     {
-      title: `Background and context: ${focus}`,
-      description: 'Find definitions, context, and how this topic is framed in the available literature.',
-      questions: ['How do sources define the topic?', 'What background information is needed?'],
+      title: `Background and context for ${focus}`,
+      description: `Clarify how ${focus} is defined and what historical, social, or institutional context shapes it.`,
+      questions: [`How do sources define ${focus}?`, `What context is needed to interpret evidence about ${focus}?`],
     },
     {
-      title: `Effects and outcomes related to ${focus}`,
-      description: 'Look for measured outcomes and the people, places, or systems affected.',
-      questions: ['What outcomes have been studied?', 'Who or what is affected?'],
+      title: `People, places, and outcomes connected to ${focus}`,
+      description: `Compare who or what is affected by ${focus} and how the reported outcomes vary.`,
+      questions: [`Which groups or places are most affected by ${focus}?`, `What outcomes have been measured for ${focus}?`],
     },
     {
-      title: `Evidence, methods, and limitations`,
-      description: 'Check how findings were produced and where the available evidence has limits.',
-      questions: ['What methods were used?', 'What uncertainty or limitations do sources report?'],
+      title: `Responses and decisions related to ${focus}`,
+      description: `Review actions, policies, or practical responses related to ${focus} and what evaluations report.`,
+      questions: [`Which responses to ${focus} have been evaluated?`, `What evidence supports or challenges those responses to ${focus}?`],
+    },
+    {
+      title: `Evidence and measurement of ${focus}`,
+      description: `Check how researchers measure ${focus}, compare results, and describe uncertainty.`,
+      questions: [`Which methods and data are used to study ${focus}?`, `What limitations affect current evidence about ${focus}?`],
     },
   ];
 
   if (/\b(cause|causes|why|factor|factors|influence|impact|effect)\b/i.test(question)) {
     areas.splice(1, 0, {
-      title: `Possible causes and contributing factors`,
-      description: 'Separate proposed causes from associations and look for evidence about how they are connected.',
-      questions: ['Which factors are associated with the issue?', 'Does a source establish causation or only correlation?'],
+      title: `Drivers and mechanisms behind ${focus}`,
+      description: `Separate proposed causes of ${focus} from associations and identify evidence about how they connect.`,
+      questions: [`Which factors are associated with ${focus}?`, `What evidence distinguishes causes of ${focus} from correlation?`],
+    });
+  }
+  if (/\b(compare|comparison|versus|vs\.?|difference|differences)\b/i.test(question)) {
+    areas.splice(2, 0, {
+      title: `Comparisons and differences in ${focus}`,
+      description: `Identify comparable measures and contextual differences needed to interpret comparisons of ${focus}.`,
+      questions: [`How do the cases in ${focus} differ on comparable measures?`, `Which contextual factors may explain differences in ${focus}?`],
     });
   }
 
-  return areas;
+  return areas.slice(0, 5);
 }
 
 function getGeographicScope(question, region) {

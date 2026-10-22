@@ -1,29 +1,29 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase, supabaseConfigError } from '../community/supabaseClient.js';
+import { neon, neonConfigError } from '../community/neonClient.js';
 
 const CommunityAuthContext = createContext(null);
 
 export function CommunityAuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(Boolean(supabase));
+  const [loading, setLoading] = useState(Boolean(neon));
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!neon) return undefined;
 
     let active = true;
-    supabase.auth.getSession().then(({ data, error: sessionError }) => {
+    neon.auth.getSession().then(({ data, error: sessionError }) => {
       if (!active) return;
       if (sessionError) setError(sessionError.message);
       setUser(data.session?.user ?? null);
       setLoading(false);
     }).catch((sessionError) => {
       if (!active) return;
-      setError(sessionError.message || 'Could not read the Supabase session.');
+      setError(sessionError.message || 'Could not read the Neon Auth session.');
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = neon.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       setError('');
     });
@@ -38,24 +38,24 @@ export function CommunityAuthProvider({ children }) {
     user,
     loading,
     error,
-    configError: supabaseConfigError,
+    configError: neonConfigError,
     async signIn(email, password) {
-      if (!supabase) throw new Error(supabaseConfigError);
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!neon) throw new Error(neonConfigError);
+      const { error: authError } = await neon.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
     },
     async signUp(email, password, displayName) {
-      if (!supabase) throw new Error(supabaseConfigError);
-      const { error: authError } = await supabase.auth.signUp({
+      if (!neon) throw new Error(neonConfigError);
+      const { error: authError } = await neon.auth.signUp({
         email,
         password,
         options: { data: { display_name: displayName } },
       });
       if (authError) throw authError;
     },
-    async signOut(scope = 'local') {
-      if (!supabase) return;
-      const { error: authError } = await supabase.auth.signOut({ scope });
+    async signOut() {
+      if (!neon) return;
+      const { error: authError } = await neon.auth.signOut();
       if (authError) throw authError;
     },
   }), [error, loading, user]);

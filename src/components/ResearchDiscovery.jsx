@@ -12,7 +12,8 @@ import { addResearchHistoryEntry, compactResearchForHistory } from './researchHi
 import { getTimeGreeting } from './landingGreeting.js';
 import AccountCenter from './AccountCenter.jsx';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
-import { supabase } from '../community/supabaseClient.js';
+import { neon } from '../community/neonClient.js';
+import { getAvatarUrl } from '../neon/assetsClient.js';
 import {
   addSourceToProject,
   createSavedProject,
@@ -156,10 +157,17 @@ function Icon({ name, size = 18 }) {
   const paths = {
     arrow: <><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></>,
     book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></>,
+    clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
     close: <><path d="m18 6-12 12" /><path d="m6 6 12 12" /></>,
     chevron: <path d="m6 9 6 6 6-6" />,
+    compass: <><circle cx="12" cy="12" r="9" /><path d="m15.8 8.2-2.4 5.2-5.2 2.4 2.4-5.2 5.2-2.4Z" /></>,
+    dashboard: <><rect x="3" y="3" width="8" height="8" rx="1.5" /><rect x="13" y="3" width="8" height="5" rx="1.5" /><rect x="13" y="10" width="8" height="11" rx="1.5" /><rect x="3" y="13" width="8" height="8" rx="1.5" /></>,
     gear: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1a1.7 1.7 0 0 1-2.4 2.4L17 17.4a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 0 1-3.4 0v-.2a1.7 1.7 0 0 0-2.9-1.2l-.1.1a1.7 1.7 0 0 1-2.4-2.4l.1-.1a1.7 1.7 0 0 0-1.2-2.9H4a1.7 1.7 0 0 1 0-3.4h.2a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a1.7 1.7 0 0 1 2.4-2.4l.1.1a1.7 1.7 0 0 0 2.9-1.2V4a1.7 1.7 0 0 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 0 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 0 1 0 3.4h-.2a1.7 1.7 0 0 0-1.2.9Z" /></>,
+    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M8 13h8M8 17h8" /></>,
+    filePlus: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M12 12v6m-3-3h6" /></>,
+    folder: <><path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 9h18" /></>,
     search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
+    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="10" cy="7" r="4" /><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>,
     workspace: <><circle cx="12" cy="12" r="2.5" /><circle cx="5" cy="6" r="1.5" /><circle cx="19" cy="6" r="1.5" /><circle cx="5" cy="18" r="1.5" /><circle cx="19" cy="18" r="1.5" /><path d="m10 10-4-3M14 10l4-3M10 14l-4 3m8-3 4 3" /></>,
     edit: <><path d="m16 5 3 3" /><path d="M4 20h4l11-11a2.1 2.1 0 0 0-4-4L4 16v4Z" /></>,
     enter: <><path d="M10 17 15 12 10 7" /><path d="M15 12H3" /><path d="M21 3v18" /></>,
@@ -282,7 +290,7 @@ export default function ResearchDiscovery({
   }, []);
 
   useEffect(() => {
-    if (!user || !supabase) {
+    if (!user || !neon) {
       setResearchDefaults(null);
       setProfileAvatarUrl('');
       setDisplayName('');
@@ -292,7 +300,7 @@ export default function ResearchDiscovery({
     setResearchDefaults(null);
     setProfileAvatarUrl('');
     setDisplayName(user.user_metadata?.display_name?.trim() ?? '');
-    supabase
+    neon
       .from('user_profiles')
       .select('display_name, research_preferences, avatar_path')
       .eq('id', user.id)
@@ -322,15 +330,10 @@ export default function ResearchDiscovery({
         setRegion(defaults.region);
         setDateRange(defaults.publication_period);
         if (data?.avatar_path) {
-          supabase.storage.from('user-avatars')
-            .createSignedUrl(data.avatar_path, 60 * 60)
-            .then(({ data: signed, error: signedError }) => {
+          getAvatarUrl(data.avatar_path)
+            .then((signedUrl) => {
               if (!active) return;
-              if (signedError) {
-                setProjectStorageWarning(`Profile photo could not be loaded: ${signedError.message}`);
-                return;
-              }
-              setProfileAvatarUrl(signed.signedUrl);
+              setProfileAvatarUrl(signedUrl);
             })
             .catch((signedError) => {
               if (active) setProjectStorageWarning(`Profile photo could not be loaded: ${signedError.message}`);
@@ -451,7 +454,7 @@ export default function ResearchDiscovery({
     const terms = deferredQuery.trim().toLocaleLowerCase();
     return research.sources
       .filter((source) => matchesQuestionRelevance(
-        `${source.title} ${source.abstract ?? ''} ${source.publisher ?? ''} ${source.journal ?? ''}`,
+        source.abstract ?? '',
         research.question,
       ))
       .filter((source) => {
@@ -485,7 +488,7 @@ export default function ResearchDiscovery({
     const terms = deferredQuery.trim().toLocaleLowerCase();
     return (research.videos ?? [])
       .filter((video) => matchesQuestionRelevance(
-        `${video.title} ${video.description ?? ''} ${video.channel ?? ''} ${video.platform ?? ''}`,
+        video.description ?? '',
         research.question,
       ))
       .filter((video) => matchesVideoDate(video, dateRange))
@@ -504,11 +507,11 @@ export default function ResearchDiscovery({
     const terms = deferredQuery.trim().toLocaleLowerCase();
     return (research.webSources ?? [])
       .filter((source) => matchesQuestionRelevance(
-        `${source.title} ${source.description ?? ''} ${source.provider ?? ''}`,
+        source.rawContent || source.description || '',
         research.question,
       ))
       .filter((source) => matchesWebDate(source, dateRange))
-      .filter((source) => !terms || `${source.title} ${source.description} ${source.provider}`
+      .filter((source) => !terms || `${source.title} ${source.description} ${source.rawContent} ${source.provider}`
         .toLocaleLowerCase()
         .includes(terms))
       .sort((a, b) => {
@@ -534,6 +537,7 @@ export default function ResearchDiscovery({
         title: source.title,
         url: source.url,
         description: source.description,
+        rawContent: source.rawContent,
         provider: source.provider,
         type: 'Web result',
       })),
@@ -547,7 +551,7 @@ export default function ResearchDiscovery({
         type: 'Video',
       })),
     ].filter((source) =>
-      matchesQuestionRelevance(`${source.title} ${source.description ?? ''}`, research.question) &&
+      matchesQuestionRelevance(source.rawContent || source.description || '', research.question) &&
       matchesResearchArea(source, selectedResearchArea),
     );
   }, [research, selectedResearchArea]);
@@ -952,6 +956,7 @@ export default function ResearchDiscovery({
             >
               <Icon name="menu" size={19} />
             </button>
+            <img className="research-sidebar-brand-logo" src="/brinfolynk-mark.png" alt="" />
             <span>Brinfolynk</span>
           </div>
           <nav
@@ -974,7 +979,7 @@ export default function ResearchDiscovery({
               title="New Research"
               onClick={startNewResearch}
             >
-              <Icon name="spark" size={17} />
+              <Icon name="filePlus" size={17} />
               <span>New Research</span>
             </button>
             <button
@@ -989,7 +994,7 @@ export default function ResearchDiscovery({
               title="Intelligence Workspace"
               onClick={() => setActivePage('org-dashboard')}
             >
-              <Icon name="workspace" size={17} />
+              <Icon name="dashboard" size={17} />
               <span>Intelligence Workspace</span>
             </button>
             <div className="research-sidebar-project-list research-sidebar-file-builder-list">
@@ -1000,7 +1005,7 @@ export default function ResearchDiscovery({
                 aria-current={activePage === 'file-builder' ? 'page' : undefined}
                 onClick={() => setActivePage('file-builder')}
               >
-                <Icon name="book" size={17} />
+                <Icon name="file" size={17} />
                 <span>Research File Builder</span>
               </button>
             </div>
@@ -1017,7 +1022,7 @@ export default function ResearchDiscovery({
                 setSavedProjectsExpanded((expanded) => !expanded);
               }}
             >
-              <Icon name="book" size={17} />
+              <Icon name="folder" size={17} />
               <span>Source Collections</span>
               {savedProjects.length > 0 && <span className="research-sidebar-count">{savedProjects.length}</span>}
               <Icon name="chevron" size={15} />
@@ -1054,7 +1059,7 @@ export default function ResearchDiscovery({
                 setHistoryExpanded((expanded) => !expanded);
               }}
             >
-              <Icon name="search" size={17} />
+              <Icon name="clock" size={17} />
               <span>History</span>
               {history.length > 0 && <span className="research-sidebar-count">{history.length}</span>}
               <Icon name="chevron" size={15} />
@@ -1096,7 +1101,7 @@ export default function ResearchDiscovery({
               title="Discover"
               onClick={() => setActivePage('discover')}
             >
-              <Icon name="search" size={17} />
+              <Icon name="compass" size={17} />
               <span>Discover</span>
             </button>
             <button
@@ -1106,7 +1111,7 @@ export default function ResearchDiscovery({
               title="Community Research Hub"
               onClick={() => setActivePage('community-hub')}
             >
-              <Icon name="book" size={17} />
+              <Icon name="users" size={17} />
               <span>Community Research Hub</span>
             </button>
           </nav>
@@ -1277,7 +1282,15 @@ export default function ResearchDiscovery({
           </section>
         )}
 
-        {researchScreen === 'form' && <form className="research-form research-question-form" onSubmit={(event) => startResearch(event, null, null, { reuseCurrentResearch: Boolean(research) })}>
+        {researchScreen === 'form' && <div className={`research-form-stage${!research ? ' research-form-stage-home' : ''}`}>
+        {!research && (
+          <div className="research-home-brand" aria-label="Brinfolynk">
+            <img src="/brinfolynk-mark.png" alt="" />
+            <h1>Brinfolynk</h1>
+          </div>
+        )}
+
+        <form className="research-form research-question-form" onSubmit={(event) => startResearch(event, null, null, { reuseCurrentResearch: Boolean(research) })}>
           <details
             className="research-options-drawer"
             ref={researchOptionsRef}
@@ -1423,7 +1436,8 @@ export default function ResearchDiscovery({
               </button>
             </div>
           )}
-        </form>}
+        </form>
+        </div>}
 
         {researchScreen === 'form' && <div className="research-messages" aria-live="polite" aria-atomic="true">
           {loading && (

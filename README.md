@@ -63,26 +63,26 @@ Start the API and frontend together:
 npm run dev
 ```
 
-Then open <http://localhost:5173>.
+Then open <http://127.0.0.1:5173>.
 
-Research API requests are proxied to `http://localhost:3001` during development. The `npm run dev` command starts both the API and Vite frontend. For a single-process production run:
+Research API requests are proxied to `http://localhost:3001` during development. The `npm run dev` command starts the API and Vite frontend, reusing either service if it is already running. For a single-process production run:
 
 ```bash
 npm run build       # writes the frontend bundle to ./dist
 npm run server      # serves the UI and API on port 3001
 ```
 
-### Install ATTIS as a web app
+### Install Brinfolynk as a web app
 
 The production site can be installed as a Progressive Web App (PWA). It must be served over HTTPS (or localhost). After deploying, open the site in a supported browser and use its install control/menu (for example, **Install app** in Chrome or Edge). On iPhone or iPad, open the site in Safari, tap **Share**, then **Add to Home Screen**.
 
-The app shell, entry scripts/styles, and built assets are cached so the app can open while offline. Research searches, Supabase sign-in and cloud features, and external map/source services still require an internet connection. Development mode does not register the service worker; use `npm run build` followed by `npm run preview` to test installation locally.
+The app shell, entry scripts/styles, and built assets are cached so the app can open while offline. Research searches, Neon sign-in and cloud features, and external map/source services still require an internet connection. Development mode does not register the service worker; use `npm run build` followed by `npm run preview` to test installation locally.
 
 ### Deploying to Vercel
 
 Import the repository in Vercel with the project root set to `/` and the **Vite** preset. Use `npm run build` as the build command and `dist` as the output directory. The `api/[...path].js` serverless function hosts the research API on the same domain, so `/api/research`, `/api/research/continue`, `/api/discover/trending`, and `/api/health` work without a separate API host.
 
-Optional provider credentials can be added under the Vercel project's **Settings → Environment Variables** using the server-side names in `.env.example` (for example, `TAVILY_API_KEY` or `YOUTUBE_API_KEY`). Do not use `VITE_` prefixes for server-side secrets. Supabase browser settings use `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; never add a Supabase service-role key to the frontend. The app can run without optional provider credentials, though some discovery sources will be unavailable.
+Optional provider credentials can be added under the Vercel project's **Settings → Environment Variables** using the server-side names in `.env.example` (for example, `TAVILY_API_KEY` or `YOUTUBE_API_KEY`). Do not use `VITE_` prefixes for server-side secrets. Neon browser settings use `VITE_NEON_AUTH_URL`, `VITE_NEON_DATA_API_URL`, and `VITE_NEON_FUNCTION_ASSETS_BASE_URL`; never expose a Neon database URL or object-storage credentials in frontend variables. The app can run without optional provider credentials, though some discovery sources will be unavailable.
 
 If visitors should be able to use the deployed site without signing in to Vercel, check **Settings → Deployment Protection** and disable protection for the production deployment.
 
@@ -99,27 +99,23 @@ npm run server
 
 For Docker Compose, copy `.env.example` to `.env` and set the provider credentials you use; Compose passes them to the API container. Never commit `.env` or expose server-side provider credentials in frontend configuration. Google Programmable Search returns up to 10 results per query; Tavily and Brave Search each return up to 20 web results per query. PeerTube and YouTube video searches paginate results and return up to 100 videos per configured provider per query.
 
-### Community Research Hub and account profiles (Supabase)
+### Community Research Hub and account profiles (Neon)
 
-The Community Research Hub and private account profiles use Supabase Auth, Postgres, and private Supabase Storage. Without Supabase configuration, the rest of the application continues to work; account features show sign-in/setup guidance.
+The Community Research Hub and private account profiles use Neon Auth, the Neon Data API, Postgres, a private Object Storage bucket, and a Neon Function for authenticated asset access. Without the three `VITE_NEON_*` browser settings, the rest of the application continues to work; account features show setup guidance.
 
-1. Create a Supabase project and enable **Email** authentication under Authentication → Providers.
-2. Copy the project URL and the **anon/publishable** key (never the service-role key) to `.env` for Docker, or to `.env.local` for local Vite development:
+1. From the project root, authenticate the Neon CLI (`neon login`) and deploy the services declared in `neon.ts` with `neon deploy`. PowerShell users may need `neon.cmd` if script execution policy blocks the `neon` shim. The CLI writes service environment variables to `.env.local`; do not commit that file.
+2. Apply `neon/migrations/202610220001_community.sql` to the configured Neon branch after Neon Auth and the Data API are provisioned.
+3. For local Vite development, set `VITE_NEON_AUTH_URL`, `VITE_NEON_DATA_API_URL`, and `VITE_NEON_FUNCTION_ASSETS_BASE_URL` in `.env.local`, then restart the dev server. For Vercel, add those three public endpoint URLs to **Settings → Environment Variables** for each required environment and redeploy. The database connection URL and S3 credentials are server-only; never prefix them with `VITE_`.
+4. Create a new account from the Community Hub. Neon Auth accounts are separate from prior Supabase accounts; Supabase account credentials and data are not migrated by this setup. Users must register again, and old Supabase records remain in the existing Supabase project.
 
-   ```ini
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-public-anon-key
-   ```
+The current Vercel origin is trusted on the Neon production branch, and localhost access is enabled for development. Before relying on email-based account creation in production, configure the intended Neon Auth email verification and SMTP settings; disable localhost access when local sign-in is no longer needed on that branch. Add any replacement or custom Vercel domains to Neon Auth's trusted domains.
+The `supabase/migrations` directory is retained for the existing Supabase project and must not be applied to Neon; use only the migration under `neon/migrations` for this backend.
 
-3. Apply the migrations in order: `supabase/migrations/202610170001_community_research_hub.sql`, then `supabase/migrations/202610200001_user_profiles_and_preferences.sql`. The latter adds private per-user profiles and research preferences, RLS-protected private profile photos, and the authenticated `delete_my_account` workflow. Account deletion requires password reauthentication and explicit confirmation.
+Research history, saved collections, and mapping projects remain browser-local. Preferences stored in the private Neon profile are used as defaults for future research; an individual research question can still override its purpose and scope. Email/password changes and account deletion are not currently available in this app's Neon Auth integration.
 
-Research history, saved collections, and mapping projects remain browser-local and are not uploaded or deleted with an account. Preferences stored in the private Supabase profile are used as defaults for future research; an individual research question can still override its purpose and scope. This version supports English only and does not offer notification, summary-detail, or source-type preference controls because those systems are not implemented.
-4. Restart the local Vite server or rebuild/restart Docker Compose so Vite loads the public settings. In PowerShell, use `npm.cmd run dev` from this project folder if script execution policy blocks `npm`.
-5. Create an account from the Community Hub. Supabase may require email confirmation depending on the project’s Authentication settings.
+Research files remain local until the author explicitly publishes one. Publishing stores a searchable excerpt and source references in Postgres and uploads the full attachment to the private `assets` bucket; authenticated users can read published attachments. Authors can unpublish or remove their own publication, rate it once (and change their rating), or report it. Ratings use a five-rating neutral prior for recommendation scoring to reduce the effect of very small samples. Reports are private to the reporter and moderators; to assign moderators, insert trusted Neon Auth account UUIDs into `public.community_moderators` using a trusted database connection.
 
-Research files remain local until the author explicitly publishes one. Publishing copies that saved file’s content and source references to one shared record keyed to the local file ID; later updates reuse that publication. Users can unpublish or remove their own publication, rate it once (and change their rating), or report it. Ratings use a five-rating neutral prior for recommendation scoring to reduce the effect of very small samples. Reports are private to the reporter and moderators; to assign moderators, insert trusted account UUIDs into `public.community_moderators` through the Supabase SQL Editor. Never expose a service-role key in the browser or `.env.example`.
-
-Supabase stores a shared publication copy; it does not synchronize the author’s local file or publish later local edits automatically. Authors should save changes and choose **Update publication** again. Browser-local files, projects, and team-workspace features remain local unless separately integrated with a backend.
+Neon stores a shared publication copy; it does not synchronize the author’s local file or publish later local edits automatically. Authors should save changes and choose **Update publication** again. Browser-local files, projects, and team-workspace features remain local unless separately integrated with a backend. AI Gateway is not enabled in the current project configuration.
 
 ### Research Discovery: current scope
 

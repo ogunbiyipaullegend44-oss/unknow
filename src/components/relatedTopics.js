@@ -1,5 +1,10 @@
 const EDUCATION_TERMS = /\b(education|school|schools|student|students|teacher|teachers|learning|literacy|university|universities)\b/i;
 const HEALTH_TERMS = /\b(health|disease|cancer|medical|medicine|patient|patients|asthma|mental health|public health)\b/i;
+const ENVIRONMENT_TERMS = /\b(climate|warming|weather|pollution|air quality|biodiversity|ecosystem|wildlife|deforestation|emissions|environment|flood|drought|wildfire|renewable energy)\b/i;
+const ECONOMY_TERMS = /\b(economy|economic|employment|jobs|wages|income|poverty|inflation|trade|labor|labour|business|industry|market|unemployment)\b/i;
+const TECHNOLOGY_TERMS = /\b(technology|artificial intelligence|AI|algorithm|algorithms|automation|digital|internet|social media|platform|cybersecurity|software|robotics)\b/i;
+const AGRICULTURE_TERMS = /\b(agriculture|farming|farmer|farmers|crop|crops|food security|food supply|livestock|irrigation|soil)\b/i;
+const POLITICS_TERMS = /\b(politics|political|government|governance|election|elections|policy|regulation|legislation|democracy|public administration)\b/i;
 
 function topicPhrase(question) {
   let topic = question
@@ -11,6 +16,34 @@ function topicPhrase(question) {
     .trim();
   if (topic.length > 115) topic = `${topic.slice(0, 112).trimEnd()}...`;
   return topic || question.trim().replace(/[?!.]+$/g, '');
+}
+
+function recommendedCategories(topicId, question) {
+  const context = String(question ?? '');
+  const domainCategories = EDUCATION_TERMS.test(context)
+    ? ['Government and Official Sources', 'Academic Research', 'Reports and Statistical Data']
+    : HEALTH_TERMS.test(context)
+      ? ['Academic Research', 'Government and Official Sources', 'Reports and Statistical Data']
+      : ENVIRONMENT_TERMS.test(context) || AGRICULTURE_TERMS.test(context)
+        ? ['Government and Official Sources', 'Reports and Statistical Data', 'Academic Research']
+        : ECONOMY_TERMS.test(context)
+          ? ['Reports and Statistical Data', 'Government and Official Sources', 'Academic Research']
+          : TECHNOLOGY_TERMS.test(context)
+            ? ['Academic Research', 'News and Journalism', 'Websites and Articles']
+            : POLITICS_TERMS.test(context)
+              ? ['News and Journalism', 'Government and Official Sources', 'Academic Research']
+              : ['Academic Research', 'Government and Official Sources', 'Reports and Statistical Data'];
+
+  const topicCategories = {
+    drivers: ['Academic Research', 'Reports and Statistical Data'],
+    outcomes: ['Reports and Statistical Data', 'Government and Official Sources'],
+    interventions: ['Government and Official Sources', 'Reports and Statistical Data'],
+    comparisons: ['Reports and Statistical Data', 'Academic Research'],
+    experience: ['News and Journalism', 'Websites and Articles'],
+    'evidence-quality': ['Academic Research', 'Books and Other Publications'],
+  };
+  const preferred = topicCategories[topicId] ?? [];
+  return [...new Set([...preferred, ...domainCategories])].slice(0, 3);
 }
 
 export function getRelatedTopics(research) {
@@ -120,5 +153,8 @@ export function getRelatedTopics(research) {
     });
   }
 
-  return topics;
+  return topics.map((topic) => ({
+    ...topic,
+    categories: recommendedCategories(topic.id, research.question),
+  }));
 }

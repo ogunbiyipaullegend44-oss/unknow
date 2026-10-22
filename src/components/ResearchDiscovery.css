@@ -37,6 +37,7 @@
 }
 
 .research-sidebar-collapsed .research-sidebar-brand > span,
+.research-sidebar-collapsed .research-sidebar-brand-logo,
 .research-sidebar-collapsed .research-sidebar-nav button > span,
 .research-sidebar-collapsed .research-sidebar-footer-button > span:not(.research-sidebar-avatar),
 .research-sidebar-collapsed .research-sidebar-note,
@@ -168,6 +169,14 @@
   padding: 4px 7px 22px;
   font-size: 14px;
   font-weight: 700;
+}
+
+.research-sidebar-brand-logo {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 8px;
+  object-fit: cover;
 }
 
 .research-sidebar-brand-toggle {
@@ -449,6 +458,41 @@
   min-height: calc(100vh - 60px);
   flex-direction: column;
   padding: clamp(28px, 6vh, 64px) 0 clamp(24px, 5vh, 48px);
+}
+
+.research-form-stage-home {
+  width: min(100%, 720px);
+  margin: auto;
+}
+
+.research-home-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  margin: 0 auto 24px;
+}
+
+.research-home-brand img {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  border-radius: 13px;
+  object-fit: cover;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.research-home-brand h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.research-form-stage-home .research-question-form {
+  width: 100%;
+  margin: 0;
 }
 
 .research-page-controls {
@@ -817,6 +861,7 @@
   min-height: 64px;
   max-height: 40vh;
   overflow-y: auto;
+  border-radius: 12px;
   padding-right: 48px;
   padding-bottom: 48px;
   resize: none;

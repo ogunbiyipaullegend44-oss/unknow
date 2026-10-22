@@ -7,6 +7,7 @@ import {
 } from './sourceCategories.js';
 import {
   ACCESSIBILITY_TYPES,
+  assessQuestionContext,
   compileSourceFilters,
   DATE_FILTERS,
   EVIDENCE_TYPES,
@@ -62,15 +63,6 @@ function termsFor(text) {
   )];
 }
 
-function overlapCount(item, words) {
-  const text = new Set(
-    `${item.title} ${item.description} ${item.publisher}`
-      .toLocaleLowerCase()
-      .match(/[\p{L}\p{N}][\p{L}\p{N}'-]*/gu) ?? [],
-  );
-  return words.filter((word) => text.has(word)).length;
-}
-
 function possibleArea(item, areas) {
   const text = new Set(
     `${item.title} ${item.description} ${item.publisher}`
@@ -102,6 +94,7 @@ function makeItems(research) {
       type: source.sourceType || '',
       description: source.abstract || '',
       abstract: source.abstract || '',
+      rawContent: source.abstract || '',
       evidence: source.abstract || '',
       doi: source.doi || '',
       citationCount: source.citationCount,
@@ -122,8 +115,9 @@ function makeItems(research) {
       date: source.publishedAt || '',
       type: '',
       description: source.description || '',
+      rawContent: source.rawContent || '',
       abstract: '',
-      evidence: source.description || '',
+      evidence: source.rawContent || source.description || '',
       provider: source.provider || 'Web search',
       openAccessUrl: '',
       openAccess: false,
@@ -141,6 +135,7 @@ function makeItems(research) {
       date: video.publishedAt || '',
       type: 'Video',
       description: video.description || '',
+      rawContent: video.description || '',
       abstract: '',
       evidence: video.description || '',
       provider: video.platform || 'Video platform',
@@ -159,13 +154,20 @@ function classifyItems(research) {
   }));
   return makeItems(research).map((item) => {
     const categorized = { ...item, category: categoryFor(item) };
+    const contextReview = assessQuestionContext(
+      [item.rawContent, item.description, item.abstract, item.evidence]
+        .filter((text) => typeof text === 'string' && text.trim())
+        .join('. '),
+      research.question,
+    );
     return {
       ...categorized,
       filterSearchText: sourceSearchText(categorized),
       filterGeographyText: sourceGeographyText(categorized),
       organizationTypes: organizationTypesFor(categorized),
       evidenceTypes: evidenceTypesFor(categorized),
-      relevanceOverlap: overlapCount(categorized, queryWords),
+      contextReview,
+      relevanceOverlap: contextReview.matchedTerms.length,
       relevanceTermCount: queryWords.length,
       possibleResearchArea: possibleArea(categorized, researchAreas),
     };
@@ -253,7 +255,10 @@ export default function SourceDiscovery({
   const availableItems = useMemo(() => sortSources(classifiedItems
     .filter((item) => !excludedIds.has(item.id))
     .filter((item) => matchesSourceFilters(item, deferredFilters, filterContext, compiledFilters)), deferredFilters.sort)
-    .sort((left, right) => right.relevanceOverlap - left.relevanceOverlap),
+    .sort((left, right) =>
+      Number(right.contextReview.relevant) - Number(left.contextReview.relevant) ||
+      right.relevanceOverlap - left.relevanceOverlap,
+    ),
   [classifiedItems, deferredFilters.sort, excludedIds, filterContext, compiledFilters]);
   const filterChips = useMemo(
     () => removableFilterChips(filters, (key, value) => {
@@ -368,7 +373,7 @@ export default function SourceDiscovery({
       <div className="discovery-heading">
         <div>
           <h3>Source discovery</h3>
-          <p>Search terms are extracted from your question, and results must match at least two topic words (or the only available topic word). This is a text-overlap check, not an AI relevance review.</p>
+          <p>Question relevance checks retrieved source text, not just the title or publisher. A transparent sentence-level rule looks for multiple question concepts together; this is not AI or a guarantee that the source answers the question.</p>
         </div>
         <div className="discovery-heading-actions">
           <span>{availableItems.length.toLocaleString()} of {items.length.toLocaleString()} retrieved sources match your filters. Use the page controls below to browse each category.</span>
@@ -376,7 +381,7 @@ export default function SourceDiscovery({
       </div>
 
       <p className="discovery-integrity-note">
-        Question relevance is applied by default using words in the original question. Relevance and research-area matches are text-overlap hints, not verified conclusions. Search snippets and catalog abstracts are not full-text review; this tool does not extract or assert claims.
+        Relevance is a rule-based context screen applied to retrieved abstracts, snippets, or provider-extracted page text when available. It is not a semantic AI review. Titles alone cannot qualify a source; limited or missing text may exclude relevant sources. Open the original source to verify context and claims.
       </p>
       <p className="comparison-instructions">
         Select at least 2 sources to compare their retrieved metadata and text. Up to {MAX_COMPARE_SOURCES} sources can be compared at once; unavailable details are marked rather than inferred.
@@ -712,15 +717,23 @@ export default function SourceDiscovery({
                         ? `Not available in source metadata; the search included ${research.scope.region}.`
                         : 'Not identified in source metadata'}
                     </dd></div>
-                    <div><dt>Retrieval status</dt><dd>{item.kind === 'web' ? `Search snippet retrieved from ${item.provider}; original page not fetched` : item.kind === 'video' ? `Public video metadata retrieved from ${item.provider}; video not reviewed` : `Catalog metadata retrieved from ${item.provider}`}</dd></div>
+                    <div><dt>Retrieval status</dt><dd>{item.kind === 'web' ? item.rawContent ? `Provider-extracted page text retrieved from ${item.provider}; the original page was not independently reviewed` : `Search snippet retrieved from ${item.provider}; original page not fetched` : item.kind === 'video' ? `Public video metadata retrieved from ${item.provider}; video not reviewed` : `Catalog metadata retrieved from ${item.provider}`}</dd></div>
                     <div><dt>Full-text availability</dt><dd>{item.openAccessUrl ? 'A catalog-provided full-text link is available; full text was not fetched' : item.openAccess ? 'Catalog marks this record open access; full text was not fetched' : 'Not determined from retrieved metadata'}</dd></div>
                     <div><dt>Original URL</dt><dd className="discovery-url"><a href={item.url} target="_blank" rel="noopener noreferrer">{item.url}</a></dd></div>
                   </dl>
                   <div className="discovery-relevance">
-                    <strong>Why it may be relevant</strong>
+                    <strong>Question context check</strong>
                     <p>
-                      {item.relevanceOverlap} of {item.relevanceTermCount} topic words matched the title, retrieved text, or publisher. Returned by {item.provider} for “{item.query}”. This word overlap is not an AI relevance review; check the original source.
+                      {item.contextReview.status === 'context-supported'
+                        ? `${item.contextReview.matchedTerms.length} of ${item.contextReview.totalTerms} topic concepts appear together in retrieved content. This is a rule-based context signal, not proof that the source answers the question.`
+                        : item.contextReview.status === 'no-content'
+                          ? 'No source description, abstract, or provider-extracted text was available to check. A title match alone is not enough.'
+                          : `Only ${item.contextReview.matchedTerms.length} of ${item.contextReview.totalTerms} topic concepts appeared together in one retrieved-content sentence; this did not meet the context-screen threshold.`}
                     </p>
+                    {item.contextReview.supportingSentence && (
+                      <blockquote>{item.contextReview.supportingSentence}</blockquote>
+                    )}
+                    <p>Returned by {item.provider} for “{item.query}”. Check the original source before relying on it.</p>
                     <strong>Possible research area</strong>
                     <p>{item.possibleResearchArea || 'Not automatically identified'}</p>
                   </div>
@@ -729,7 +742,7 @@ export default function SourceDiscovery({
                   )}
                   {item.evidence ? (
                     <details className="source-abstract">
-                      <summary>View retrieved text (metadata or snippet, not full text)</summary>
+                      <summary>{item.rawContent ? 'View provider-extracted page text (not independently verified)' : 'View retrieved abstract or snippet (not full text)'}</summary>
                       <p>{item.evidence}</p>
                     </details>
                   ) : (

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
-import { getPublicationForFile, savePublication, setPublicationPublished } from '../community/communityRepository.js';
+import { getPublicationDocument, getPublicationForFile, savePublication, setPublicationPublished } from '../community/communityRepository.js';
+import { deleteAsset, uploadPublicationDocument } from '../neon/assetsClient.js';
 import { buildPublicationContent, COMMUNITY_CATEGORIES, parseSourceReferences, validatePublicationDraft } from '../community/communityUtils.js';
 import CommunityAuthForm from './CommunityAuthForm.jsx';
 
@@ -12,6 +13,8 @@ function referencesText(references) {
 export default function CommunityPublishDialog({ file, publication: publicationProp, useSavedFileContent = true, onClose, onSaved }) {
   const { user, error: authError } = useCommunityAuth();
   const [publication, setPublication] = useState(publicationProp ?? null);
+  const [storedContent, setStoredContent] = useState('');
+  const [loadingContent, setLoadingContent] = useState(false);
   const [loading, setLoading] = useState(Boolean(user && file?.id && !publicationProp));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -19,8 +22,8 @@ export default function CommunityPublishDialog({ file, publication: publicationP
   const content = useMemo(() => (
     useSavedFileContent && file
       ? buildPublicationContent(file)
-      : publication?.document_content || (file ? buildPublicationContent(file) : '')
-  ), [file, publication, useSavedFileContent]);
+      : storedContent || publication?.document_content || (file ? buildPublicationContent(file) : '')
+  ), [file, publication, storedContent, useSavedFileContent]);
   const [draft, setDraft] = useState(() => ({
     title: publication?.title || file?.title || '',
     description: publication?.description || file?.topic || '',
@@ -58,6 +61,20 @@ export default function CommunityPublishDialog({ file, publication: publicationP
     return () => { active = false; };
   }, [file?.id, publicationProp, useSavedFileContent, user]);
 
+  useEffect(() => {
+    if (!publication?.id || useSavedFileContent) return undefined;
+    let active = true;
+    setLoadingContent(true);
+    getPublicationDocument(publication.id).then((documentContent) => {
+      if (active) setStoredContent(documentContent);
+    }).catch((loadError) => {
+      if (active) setError(loadError.message || 'Could not load the published attachment.');
+    }).finally(() => {
+      if (active) setLoadingContent(false);
+    });
+    return () => { active = false; };
+  }, [publication?.id, useSavedFileContent]);
+
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const submit = async (event) => {
     event.preventDefault();
@@ -78,12 +95,33 @@ export default function CommunityPublishDialog({ file, publication: publicationP
       };
       validatePublicationDraft(payload);
       const authorName = user.user_metadata?.display_name?.trim() || user.email?.split('@')[0] || 'Community member';
-      const saved = await savePublication(user.id, file.id, {
-        ...payload,
-        document_content: content,
-        source_references: references,
-        author_name: authorName,
-      });
+      const attachmentKey = await uploadPublicationDocument(content);
+      let saved;
+      try {
+        saved = await savePublication(user.id, file.id, {
+          ...payload,
+          document_content: content.slice(0, 12000),
+          document_object_key: attachmentKey,
+          source_references: references,
+          author_name: authorName,
+        });
+      } catch (saveError) {
+        try {
+          await deleteAsset(attachmentKey);
+        } catch (cleanupError) {
+          throw new Error(`Could not save the publication: ${saveError.message}. The uploaded attachment could not be cleaned up: ${cleanupError.message}`);
+        }
+        throw saveError;
+      }
+      if (publication?.document_object_key && publication.document_object_key !== attachmentKey) {
+        try {
+          await deleteAsset(publication.document_object_key);
+        } catch (cleanupError) {
+          setPublication(saved);
+          setError(`The publication was saved, but the previous attachment could not be removed: ${cleanupError.message}`);
+          return;
+        }
+      }
       setPublication(saved);
       setNotice('Your research is now published in the Community Hub.');
       onSaved?.(saved);
@@ -130,12 +168,12 @@ export default function CommunityPublishDialog({ file, publication: publicationP
               <label><span>Publication date</span><input type="date" value={draft.published_on} required onChange={(event) => update('published_on', event.target.value)} /></label>
             </div>
             <label><span>Source references (one “title | https://…” per line)</span><textarea value={draft.references} rows="4" onChange={(event) => update('references', event.target.value)} placeholder="Report title | https://example.org/report" /></label>
-            <details className="community-document-preview"><summary>Document preview ({content.length.toLocaleString()} characters)</summary><pre>{content.slice(0, 12000)}{content.length > 12000 ? '\n… Preview shortened; the full document will be published.' : ''}</pre></details>
+            <details className="community-document-preview"><summary>Document preview ({content.length.toLocaleString()} characters)</summary>{loadingContent ? <p>Loading full attachment…</p> : <pre>{content.slice(0, 12000)}{content.length > 12000 ? '\n… Preview shortened; the full document is stored privately.' : ''}</pre>}</details>
             <label className="community-confirm"><input type="checkbox" checked={draft.permissionConfirmed} onChange={(event) => update('permissionConfirmed', event.target.checked)} /><span>I have permission to share this document and its included material publicly.</span></label>
             {error && <p className="community-alert" role="alert">{error}</p>}
             {notice && <p className="community-success" role="status">{notice}</p>}
             <div className="community-actions"><button className="btn btn-primary" type="submit" disabled={busy || loading}>{busy ? 'Saving…' : publication?.is_published ? 'Update publication' : 'Publish to Community Hub'}</button>{publication?.is_published && <button className="btn btn-secondary" type="button" disabled={busy} onClick={unpublish}>Unpublish</button>}<button className="btn btn-ghost" type="button" onClick={onClose}>Close</button></div>
-            <p className="community-muted">Publishing sends this document and its references to the shared Supabase database. Your local research file remains in this browser.</p>
+            <p className="community-muted">Publishing stores this document and its references in Neon. Your local research file remains in this browser, and its full publication attachment is private to signed-in community members.</p>
           </form>
         )}
       </section>

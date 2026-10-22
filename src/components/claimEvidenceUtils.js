@@ -1,3 +1,5 @@
+import { assessQuestionContext } from './sourceFilterUtils.js';
+
 const STOP_WORDS = new Set([
   'about', 'after', 'also', 'among', 'because', 'been', 'being', 'between',
   'from', 'have', 'into', 'more', 'most', 'other', 'over', 'research',
@@ -21,11 +23,6 @@ function queryTerms(question) {
   );
 }
 
-function relevance(sentence, terms) {
-  const text = sentence.toLocaleLowerCase();
-  return [...terms].filter((term) => text.includes(term)).length;
-}
-
 function publicationDate(source) {
   if (!source.publicationYear) return 'Not available';
   if (source.publicationMonth) {
@@ -46,11 +43,13 @@ function sourceRecords(research) {
     })),
     ...(research.webSources ?? []).map((source) => ({
       ...source,
-      evidenceText: source.description || '',
-      evidenceLocation: 'Search-result snippet',
+      evidenceText: source.rawContent || source.description || '',
+      evidenceLocation: source.rawContent ? 'Search-provider extracted page text' : 'Search-result snippet',
       provider: source.provider || 'Web search',
       publicationDate: source.publishedAt || 'Not available',
-      contextLimitation: 'This is a search-result snippet; the original page was not fetched or reviewed.',
+      contextLimitation: source.rawContent
+        ? 'Search-provider extracted text was screened; the original page was not independently fetched or verified.'
+        : 'This is a search-result snippet; the original page was not fetched or reviewed.',
     })),
     ...(research.videos ?? []).map((source) => ({
       ...source,
@@ -64,16 +63,22 @@ function sourceRecords(research) {
 }
 
 export function buildEvidenceStatements(research) {
-  const terms = queryTerms(research.question);
   const statements = [];
   const statementByKey = new Map();
 
   for (const source of sourceRecords(research)) {
     if (!source.title || !source.url || !source.evidenceText) continue;
     const candidates = sentencesFrom(source.evidenceText)
-      .map((text, index) => ({ text, index, relevance: relevance(text, terms) }))
-      .filter((candidate) => candidate.relevance >= Math.min(2, terms.size))
-      .sort((left, right) => right.relevance - left.relevance || left.index - right.index)
+      .map((text, index) => ({
+        text,
+        index,
+        contextReview: assessQuestionContext(text, research.question),
+      }))
+      .filter((candidate) => candidate.contextReview.relevant)
+      .sort((left, right) =>
+        right.contextReview.matchedTerms.length - left.contextReview.matchedTerms.length ||
+        left.index - right.index,
+      )
       .slice(0, 1);
 
     for (const candidate of candidates) {

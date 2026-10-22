@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  assessQuestionContext,
   compileSourceFilters,
   dateFilterMatches,
   evidenceTypesFor,
@@ -121,8 +122,8 @@ test('question relevance requires multiple topic terms from the retrieved source
   }), filters), false);
   assert.equal(matchesSourceFilters(source({
     title: 'Urban air pollution and asthma',
-    abstract: 'This study examines asthma rates and urban air pollution.',
-    description: 'A population study of respiratory health.',
+    abstract: 'A population study of respiratory health.',
+    description: 'This study examines asthma rates and urban air pollution.',
   }), filters), true);
 });
 
@@ -137,10 +138,35 @@ test('question relevance compares complete terms and ignores punctuation and dup
   }), false);
   assert.equal(matchesSourceFilters(source({
     title: 'Climate change policy and climate adaptation',
+    abstract: 'Climate change policy and climate adaptation.',
   }), {
     ...BASE_FILTERS,
     relevanceQuestion: 'Climate change climate',
   }), true);
+});
+
+test('question context excludes title-only matches and requires concepts in one sentence', () => {
+  const question = 'How does urban air pollution relate to asthma rates, childhood respiratory health, and school attendance?';
+  assert.equal(matchesSourceFilters(source({
+    title: 'Urban air pollution, asthma rates, childhood health, and school attendance',
+    abstract: '',
+    description: '',
+  }), { ...BASE_FILTERS, relevanceQuestion: question }), false);
+
+  const splitAcrossSentences = assessQuestionContext(
+    'Urban air quality is monitored in cities. Asthma rates are recorded separately.',
+    question,
+  );
+  assert.equal(splitAcrossSentences.relevant, false);
+  assert.equal(splitAcrossSentences.status, 'partial-context');
+
+  const sameSentence = assessQuestionContext(
+    'Urban air pollution was associated with increased asthma rates in the study.',
+    question,
+  );
+  assert.equal(sameSentence.relevant, true);
+  assert.match(sameSentence.supportingSentence, /air pollution.*asthma rates/);
+  assert.equal(assessQuestionContext('', question).status, 'no-content');
 });
 
 test('custom and preset date filters use publication dates, not retrieval time', () => {
