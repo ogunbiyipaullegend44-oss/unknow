@@ -455,7 +455,7 @@
 .research-form-stage-home {
   display: flex;
   min-height: 0;
-  width: min(100%, 720px);
+  width: min(100%, 640px);
   flex: 1;
   flex-direction: column;
   justify-content: flex-end;
@@ -823,7 +823,7 @@
 }
 
 .research-question-form {
-  width: min(100%, 720px);
+  width: min(100%, 640px);
   max-width: none;
   flex: 0 0 auto;
   margin: auto auto 0;
@@ -866,7 +866,7 @@
   min-height: 64px;
   max-height: 40vh;
   overflow-y: auto;
-  border-radius: 12px;
+  border-radius: 16px;
   padding-right: 48px;
   padding-bottom: 48px;
   resize: none;
@@ -1715,16 +1715,6 @@
 
   .research-main-question .research-messages {
     margin-bottom: 0;
-  }
-
-  .research-form-stage-home .research-question-input-wrap {
-    width: var(--question-input-width);
-    max-width: 100%;
-    transition: width 180ms ease;
-  }
-
-  .research-form-stage-home .research-question-input-wrap textarea {
-    width: 100%;
   }
 
   .research-sidebar {

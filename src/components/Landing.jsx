@@ -58,8 +58,8 @@ function LandingScreen({
         <ThemeToggle />
       </div>
 
-      <div className="landing-content">
-        <div className="landing-brand">
+      <div className={`landing-content${hasResearch ? '' : ' landing-content-splash'}`}>
+        <div className={`landing-brand${hasResearch ? '' : ' landing-brand-splash'}`}>
           <div className="landing-brand-lockup">
             <img className="landing-logo" src="/brinfolynk-mark.png" alt="Brinfolynk" />
           </div>

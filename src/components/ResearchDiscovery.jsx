@@ -1410,10 +1410,7 @@ export default function ResearchDiscovery({
               ? 'Research question'
               : `${firstName ? `${firstName}, ` : ''}what would you like to investigate?`}
           </label>
-          <div
-            className="research-question-input-wrap"
-            style={{ '--question-input-width': `${Math.min(100, 58 + question.length * 1.5)}%` }}
-          >
+          <div className="research-question-input-wrap">
             <textarea
               ref={questionInputRef}
               id="research-question"
