@@ -11,8 +11,9 @@ export function validateAiTopicOverviewRequest(body) {
     body.question.trim().length > MAX_QUESTION_LENGTH) {
     return 'The topic must be between 8 and 1,000 characters.';
   }
-  if (!Array.isArray(body.sources) || body.sources.length > MAX_SOURCE_COUNT) {
-    return `Provide no more than ${MAX_SOURCE_COUNT} source records for the overview.`;
+  if (!Array.isArray(body.sources) || body.sources.length < 1 ||
+    body.sources.length > MAX_SOURCE_COUNT) {
+    return `Provide between 1 and ${MAX_SOURCE_COUNT} source records for the overview.`;
   }
 
   const ids = new Set();

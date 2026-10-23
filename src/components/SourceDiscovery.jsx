@@ -340,6 +340,13 @@ export default function SourceDiscovery({
   const overviewSources = useMemo(() => selectOverviewSources(items), [items]);
   const overviewSourceSignature = overviewSources.map(({ id }) => id).join('|');
   useEffect(() => {
+    if (!overviewSources.length) {
+      setTopicOverviewResult(null);
+      setTopicOverviewError('');
+      setTopicOverviewLoading(false);
+      return undefined;
+    }
+
     const controller = new AbortController();
     setTopicOverviewResult(null);
     setTopicOverviewError('');

@@ -207,6 +207,33 @@ test('AI topic overview defines the subject and only links returned source ids t
   });
 });
 
+test('AI topic overview rejects an empty source list without calling Anthropic', async (t) => {
+  let providerCalls = 0;
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async () => {
+      providerCalls += 1;
+      throw new Error('The provider should not be called for an empty source list.');
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/topic-overview`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'Update on Nigeria election',
+      sources: [],
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.match(body.error, /between 1 and 8 source records/);
+  assert.equal(providerCalls, 0);
+});
+
 test('current-affairs search intent expands update queries into timely, topic-specific news searches', () => {
   const query = buildCurrentAffairsSearchQuery('update on Nigeria election');
   const climateQuery = buildCurrentAffairsSearchQuery('latest updates on climate policy in India');
