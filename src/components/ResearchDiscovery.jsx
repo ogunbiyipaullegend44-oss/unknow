@@ -215,6 +215,7 @@ export default function ResearchDiscovery({
   const [endYear, setEndYear] = useState('');
   const [month, setMonth] = useState('');
   const [additionalMonths, setAdditionalMonths] = useState([]);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [purposes, setPurposes] = useState(['general']);
   const [research, setResearch] = useState(null);
   const [videoRefreshState, setVideoRefreshState] = useState(null);
@@ -259,6 +260,7 @@ export default function ResearchDiscovery({
   const profilePopoverRef = useRef(null);
   const questionInputRef = useRef(null);
   const researchOptionsRef = useRef(null);
+  const monthPickerRef = useRef(null);
   const outsideResearchOptionsClicksRef = useRef(0);
   const videoRefreshAttemptRef = useRef('');
 
@@ -547,6 +549,32 @@ export default function ResearchDiscovery({
     document.addEventListener('pointerdown', closeWhenClickingOutside);
     return () => document.removeEventListener('pointerdown', closeWhenClickingOutside);
   }, [researchOptionsOpen]);
+
+  useEffect(() => {
+    if (!monthPickerOpen) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (event.target instanceof Node && !monthPickerRef.current?.contains(event.target)) {
+        setMonthPickerOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setMonthPickerOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [monthPickerOpen]);
+
+  useEffect(() => {
+    if (dateMode !== 'range' || !startYear || startYear !== endYear) {
+      setMonthPickerOpen(false);
+    }
+  }, [dateMode, endYear, startYear]);
 
   useEffect(() => {
     try {
@@ -1613,30 +1641,54 @@ export default function ResearchDiscovery({
                     <div className="scope-month-filters">
                       <label>
                         <span>Month <small>(optional)</small></span>
-                        <select value={month} onChange={(event) => setMonth(event.target.value)}>
+                        <select
+                          value={month}
+                          onChange={(event) => {
+                            const nextMonth = event.target.value;
+                            setMonth(nextMonth);
+                            if (nextMonth) {
+                              setAdditionalMonths((current) => current.filter((item) => item !== nextMonth));
+                            }
+                          }}
+                        >
                           <option value="">All months</option>
                           {MONTHS.map((item) => <option value={item} key={item}>{item}</option>)}
                         </select>
                       </label>
-                      <fieldset className="scope-month-multiselect">
-                        <legend>Also include months</legend>
-                        <div className="scope-month-options">
-                          {MONTHS.map((item) => (
-                            <label key={item}>
-                              <input
-                                type="checkbox"
-                                checked={additionalMonths.includes(item)}
-                                onChange={(event) => {
-                                  setAdditionalMonths((current) => event.target.checked
-                                    ? [...new Set([...current, item])]
-                                    : current.filter((selected) => selected !== item));
-                                }}
-                              />
-                              <span>{item}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
+                      <div className="scope-month-picker" ref={monthPickerRef}>
+                        <button
+                          className="scope-month-picker-toggle"
+                          type="button"
+                          aria-expanded={monthPickerOpen}
+                          aria-controls="scope-month-options"
+                          onClick={() => setMonthPickerOpen((open) => !open)}
+                        >
+                          Also include months
+                          {additionalMonths.length > 0 && ` (${additionalMonths.length} selected)`}
+                          <span aria-hidden="true">{monthPickerOpen ? '−' : '+'}</span>
+                        </button>
+                        {monthPickerOpen && (
+                          <fieldset className="scope-month-multiselect" id="scope-month-options">
+                            <legend>Select months</legend>
+                            <div className="scope-month-options">
+                              {MONTHS.filter((item) => item !== month).map((item) => (
+                                <label key={item}>
+                                  <input
+                                    type="checkbox"
+                                    checked={additionalMonths.includes(item)}
+                                    onChange={(event) => {
+                                      setAdditionalMonths((current) => event.target.checked
+                                        ? [...new Set([...current, item])]
+                                        : current.filter((selected) => selected !== item));
+                                    }}
+                                  />
+                                  <span>{item}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        )}
+                      </div>
                     </div>
                   )}
                 </>

@@ -934,12 +934,52 @@
   gap: 12px;
 }
 
+.scope-month-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.scope-month-picker-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--text-1);
+  font-size: 12px;
+  text-align: left;
+}
+
+.scope-month-picker-toggle:hover,
+.scope-month-picker-toggle[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--text-0);
+}
+
+.scope-month-picker-toggle span {
+  color: var(--accent);
+  font-size: 16px;
+  line-height: 1;
+}
+
 .scope-month-multiselect {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
   min-width: 0;
   margin: 0;
   padding: 8px 10px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--bg-1);
+  box-shadow: var(--shadow-lg);
 }
 
 .scope-month-multiselect legend {
@@ -951,12 +991,15 @@
 
 .scope-month-options {
   display: grid;
+  max-height: 220px;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+  overflow-y: auto;
 }
 
 .scope-month-options label {
   display: flex;
+  width: fit-content;
   min-width: 0;
   align-items: center;
   gap: 6px;
@@ -966,8 +1009,18 @@
 }
 
 .scope-month-options input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
   flex: 0 0 auto;
   accent-color: var(--accent);
+}
+
+.scope-month-options label > span {
+  display: inline;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .scope-help {
