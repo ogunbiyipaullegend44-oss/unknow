@@ -10,15 +10,8 @@ export default function App() {
   const { project } = useProject();
   const { loaded, mapProviderSource } = useAppConfig();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [showStartupSplash, setShowStartupSplash] = useState(true);
   const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
-  const isShowingStartupSplash = !isResetPasswordRoute && showStartupSplash;
-
-  useEffect(() => {
-    if (isResetPasswordRoute) return undefined;
-    const timer = window.setTimeout(() => setShowStartupSplash(false), 4000);
-    return () => window.clearTimeout(timer);
-  }, [isResetPasswordRoute]);
+  const isWaitingForConfig = !isResetPasswordRoute && !loaded;
 
   useEffect(() => {
     const updateConnection = () => setIsOnline(navigator.onLine);
@@ -33,12 +26,8 @@ export default function App() {
   let screen;
   if (isResetPasswordRoute) {
     screen = <ResetPasswordPage />;
-  } else if (isShowingStartupSplash || !loaded) {
-    screen = (
-      <main className="app-startup-splash" role="status" aria-label="Brinfolynk">
-        <img src="/brinfolynk-splash.png" alt="Brinfolynk" />
-      </main>
-    );
+  } else if (!loaded) {
+    screen = <main className="app-loading" aria-busy="true" />;
   } else if (mapProviderSource === null) {
     // Map setup no longer blocks entry to research; the provider can be selected
     // later from the Map tab.
@@ -49,12 +38,12 @@ export default function App() {
 
   return (
     <>
-      {!isShowingStartupSplash && !isOnline && (
+      {!isWaitingForConfig && !isOnline && (
         <div className="offline-notice" role="status">
           You’re offline. Saved work stays available; live research, maps, and account features need internet.
         </div>
       )}
-      {!isShowingStartupSplash && <InstallPrompt />}
+      {!isWaitingForConfig && <InstallPrompt />}
       {screen}
     </>
   );

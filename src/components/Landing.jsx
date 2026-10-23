@@ -4,11 +4,7 @@ const ResearchDiscovery = lazy(() => import('./ResearchDiscovery.jsx'));
 
 export default function Landing() {
   return (
-    <Suspense fallback={(
-      <main className="app-startup-splash" role="status" aria-label="Brinfolynk">
-        <img src="/brinfolynk-splash.png" alt="Brinfolynk" />
-      </main>
-    )}>
+    <Suspense fallback={<main className="app-loading" aria-busy="true" />}>
       <ResearchDiscovery initialPage="research" />
     </Suspense>
   );

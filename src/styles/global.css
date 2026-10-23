@@ -10,31 +10,13 @@ body,
   padding: 0;
 }
 
-.app-startup-splash {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-  background: var(--bg-0);
-}
-
-.app-startup-splash img {
-  display: block;
-  width: clamp(96px, 24vw, 180px);
-  aspect-ratio: 1;
-  border: 2px solid #fff;
-  border-radius: 22%;
-  object-fit: contain;
-}
-
 .app-loading {
   display: grid;
   min-height: 100%;
   place-items: center;
   padding: 24px;
   color: var(--text-1);
-  background: var(--bg-0);
+  background: var(--bg-0, #0b0d12);
 }
 
 .offline-notice {
