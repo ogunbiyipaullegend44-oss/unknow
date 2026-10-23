@@ -7,6 +7,11 @@ import {
   validateResearchRequest,
 } from '../server/research.js';
 import { buildResearchSearchQuery } from '../src/utils/researchQuery.js';
+import {
+  buildCurrentAffairsSearchQuery,
+  currentAffairsTimeRange,
+  isCurrentAffairsSearch,
+} from '../src/utils/researchSearchIntent.js';
 
 test('Vercel-compatible handler accepts a parsed JSON request body', async () => {
   const response = {
@@ -32,6 +37,193 @@ test('Vercel-compatible handler accepts a parsed JSON request body', async () =>
 
   assert.equal(response.status, 400);
   assert.match(JSON.parse(response.body).error, /8 characters/);
+});
+
+test('AI relevance route validates records and does not call Anthropic without a server key', async (t) => {
+  let providerCalls = 0;
+  const server = createServer({
+    fetchImpl: async () => {
+      providerCalls += 1;
+      assert.fail('Anthropic should not be called without a configured key');
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const endpoint = `http://127.0.0.1:${server.address().port}/api/research/ai-relevance`;
+
+  const invalidResponse = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ question: 'Too short', sources: [] }),
+  });
+  assert.equal(invalidResponse.status, 400);
+
+  const unconfiguredResponse = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'How does urban heat affect public health?',
+      sources: [{ id: 'source-1', title: 'Urban heat and health', text: 'Heat exposure affects health.' }],
+    }),
+  });
+  assert.equal(unconfiguredResponse.status, 503);
+  assert.match((await unconfiguredResponse.json()).error, /ANTHROPIC_API_KEY/);
+  assert.equal(providerCalls, 0);
+});
+
+test('AI relevance route uses the server key and only returns source-grounded excerpts', async (t) => {
+  let providerRequest;
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async (url, options) => {
+      providerRequest = { url, options, body: JSON.parse(options.body) };
+      return Response.json({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            evaluations: [
+              {
+                id: 'source-1',
+                score: 91,
+                reason: 'The record directly examines heat exposure and health outcomes.',
+                context: 'Heat exposure affects health.',
+              },
+            ],
+          }),
+        }],
+      });
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/ai-relevance`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'How does urban heat affect public health?',
+      sources: [{ id: 'source-1', title: 'Urban heat and health', text: 'Heat exposure affects health.' }],
+    }),
+  });
+  const result = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
+  assert.equal(providerRequest.options.headers['x-api-key'], 'test-anthropic-key');
+  assert.equal(providerRequest.body.model, 'claude-haiku-5-5');
+  assert.equal(providerRequest.body.messages[0].content.includes('source-1'), true);
+  assert.equal(JSON.stringify(result).includes('test-anthropic-key'), false);
+  assert.deepEqual(result.evaluations, [{
+    id: 'source-1',
+    score: 91,
+    reason: 'The record directly examines heat exposure and health outcomes.',
+    context: 'Heat exposure affects health.',
+  }]);
+});
+
+test('AI relevance route discards model-generated excerpts not found in source text', async (t) => {
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async () => Response.json({
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          evaluations: [{
+            id: 'source-1',
+            score: 90,
+            reason: 'The source seems relevant.',
+            context: 'This statement is not in the submitted text.',
+          }],
+        }),
+      }],
+    }),
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/ai-relevance`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'How does urban heat affect public health?',
+      sources: [{ id: 'source-1', title: 'Urban heat and health', text: 'Heat exposure affects health.' }],
+    }),
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).evaluations[0], {
+    id: 'source-1',
+    score: 0,
+    reason: 'No verbatim supporting context was identified in the retrieved source text.',
+    context: '',
+  });
+});
+
+test('AI topic overview defines the subject and only links returned source ids to current developments', async (t) => {
+  let providerRequest;
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async (url, options) => {
+      providerRequest = { url, body: JSON.parse(options.body) };
+      return Response.json({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            definition: 'An election is a formal process for selecting public officials by voting.',
+            currentSummary: 'The electoral commission has announced the voting schedule.',
+            sourceIds: ['source-1', 'not-submitted'],
+          }),
+        }],
+      });
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/topic-overview`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'Update on Nigeria election',
+      sources: [{
+        id: 'source-1',
+        title: 'Electoral commission announces schedule',
+        date: '2026-10-21',
+        text: 'The electoral commission has announced the voting schedule.',
+      }],
+    }),
+  });
+  const result = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
+  assert.match(providerRequest.body.system, /explain in plain language what the topic itself means/i);
+  assert.match(providerRequest.body.messages[0].content, /voting schedule/);
+  assert.deepEqual(result, {
+    definition: 'An election is a formal process for selecting public officials by voting.',
+    currentSummary: 'The electoral commission has announced the voting schedule.',
+    sourceIds: ['source-1'],
+    model: 'claude-haiku-5-5',
+  });
+});
+
+test('current-affairs search intent expands update queries into timely, topic-specific news searches', () => {
+  const query = buildCurrentAffairsSearchQuery('update on Nigeria election');
+  const climateQuery = buildCurrentAffairsSearchQuery('latest updates on climate policy in India');
+
+  assert.equal(isCurrentAffairsSearch('update on Nigeria election'), true);
+  assert.match(query, /Nigeria election/i);
+  assert.match(query, /latest election news/i);
+  assert.match(query, /candidates campaign electoral commission results/i);
+  assert.equal(isCurrentAffairsSearch('latest updates on climate policy in India'), true);
+  assert.match(climateQuery, /climate policy India/i);
+  assert.match(climateQuery, /latest news current developments/i);
+  assert.doesNotMatch(climateQuery, /election candidates/i);
+  assert.equal(isCurrentAffairsSearch('update on Nigeria election', { year: 2019 }), false);
+  assert.equal(isCurrentAffairsSearch('Nigeria election results 2019'), false);
+  assert.equal(isCurrentAffairsSearch('upcoming Nigeria election 2027'), true);
+  assert.equal(currentAffairsTimeRange('upcoming Nigeria election'), 'year');
+  assert.equal(currentAffairsTimeRange('update on Nigeria election'), 'month');
 });
 
 test('research provider queries keep recurring topic words and drop question filler', () => {
@@ -949,6 +1141,70 @@ test('research API searches Tavily and Brave without returning their server keys
   assert.deepEqual(body.webWarnings, []);
 });
 
+test('current election update searches use news providers and recent results without changing academic query handling', async (t) => {
+  let tavilyPayload;
+  let braveUrl;
+  let googleUrl;
+  let openAlexUrl;
+  const server = createServer({
+    tavilyApiKey: 'tavily-test-secret',
+    braveApiKey: 'brave-test-secret',
+    googleSearchApiKey: 'google-test-secret',
+    googleSearchEngineId: 'test-engine-id',
+    fetchImpl: async (url, options) => {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'www.googleapis.com') {
+        googleUrl = parsed;
+        return Response.json({ items: [] });
+      }
+      if (parsed.hostname === 'api.tavily.com') {
+        tavilyPayload = JSON.parse(options.body);
+        return Response.json({ results: [] });
+      }
+      if (parsed.hostname === 'api.search.brave.com') {
+        braveUrl = parsed;
+        return Response.json({ web: { results: [] } });
+      }
+      if (parsed.hostname === 'api.openalex.org') {
+        openAlexUrl = parsed;
+        return Response.json({ results: [], meta: { next_cursor: null } });
+      }
+      if (parsed.hostname === 'api.crossref.org') {
+        return Response.json({ message: { items: [], 'next-cursor': null } });
+      }
+      if (parsed.hostname === 'api.semanticscholar.org') return Response.json({ data: [] });
+      if (/peertube/.test(parsed.hostname) || parsed.hostname === 'tilvids.com') {
+        return Response.json({ data: [] });
+      }
+      return Response.json({ data: [] });
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'update on Nigeria election',
+      purposes: ['journalism'],
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.match(tavilyPayload.query, /Nigeria election latest election news/i);
+  assert.equal(tavilyPayload.topic, 'news');
+  assert.equal(tavilyPayload.search_depth, 'advanced');
+  assert.equal(tavilyPayload.time_range, 'month');
+  assert.match(braveUrl.searchParams.get('q'), /Nigeria election/i);
+  assert.equal(braveUrl.searchParams.get('freshness'), 'pm');
+  assert.equal(googleUrl.searchParams.get('dateRestrict'), 'd30');
+  assert.equal(googleUrl.searchParams.get('sort'), 'date');
+  assert.match(openAlexUrl.searchParams.get('search'), /update on Nigeria election/i);
+  assert.equal(body.webWarnings.length, 0);
+});
+
 test('Google Search configuration is reported and Google errors reach the user as provider warnings', async (t) => {
   const server = createServer({
     googleSearchApiKey: 'google-test-secret',
@@ -984,11 +1240,31 @@ test('Google Search configuration is reported and Google errors reach the user a
   const body = await response.json();
 
   assert.equal(health.webProviders.google, true);
+  assert.deepEqual(health.aiProviders, {
+    anthropic: false,
+    model: 'claude-haiku-5-5',
+  });
   assert.equal(response.status, 200);
   assert.equal(body.webSources.length, 0);
   assert.match(body.webWarnings.join(' '), /Google Custom Search request was denied \(HTTP 403\)/);
   assert.match(body.webWarnings.join(' '), /verify Custom Search JSON API access/);
   assert.equal(JSON.stringify(body).includes('google-test-secret'), false);
+});
+
+test('API health reports AI availability without exposing configured credentials', async (t) => {
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-secret',
+    anthropicModel: 'test-model',
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+  const body = await response.json();
+
+  assert.equal(body.aiProviders.anthropic, true);
+  assert.equal(body.aiProviders.model, 'test-model');
+  assert.equal(JSON.stringify(body).includes('test-anthropic-secret'), false);
 });
 
 test('Google Search warns when API key and search engine ID are not both configured', async (t) => {

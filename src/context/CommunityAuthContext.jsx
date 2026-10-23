@@ -41,8 +41,26 @@ export function CommunityAuthProvider({ children }) {
     configError: neonConfigError,
     async signIn(email, password) {
       if (!neon) throw new Error(neonConfigError);
-      const { error: authError } = await neon.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await neon.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
+      if (!data.user) throw new Error('Neon Auth signed in but did not return a user session. Please try again.');
+      setUser(data.user);
+    },
+    async sendPasswordReset(email) {
+      if (!neonRegistration) throw new Error(neonConfigError);
+      const { error: resetError } = await neonRegistration.auth.requestPasswordReset({
+        email,
+        redirectTo: new URL('/reset-password', window.location.origin).href,
+      });
+      if (resetError) throw resetError;
+    },
+    async resetPassword(token, newPassword) {
+      if (!neonRegistration) throw new Error(neonConfigError);
+      const { error: resetError } = await neonRegistration.auth.resetPassword({
+        token,
+        newPassword,
+      });
+      if (resetError) throw resetError;
     },
     async signUp(email, password, displayName) {
       if (!neon) throw new Error(neonConfigError);
@@ -64,6 +82,7 @@ export function CommunityAuthProvider({ children }) {
       if (!neon) return;
       const { error: authError } = await neon.auth.signOut();
       if (authError) throw authError;
+      setUser(null);
     },
   }), [error, loading, user]);
 

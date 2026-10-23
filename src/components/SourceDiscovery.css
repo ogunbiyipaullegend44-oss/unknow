@@ -21,6 +21,66 @@
   line-height: 1.55;
 }
 
+.topic-overview-disclosure {
+  color: var(--text-2) !important;
+  font-size: 12px !important;
+}
+
+.topic-overview-content {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-1);
+}
+
+.topic-overview-content h4 {
+  margin: 0 0 5px;
+  color: var(--text-0);
+  font-size: 14px;
+}
+
+.topic-overview-citations {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topic-overview-citations li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.topic-overview-citations a {
+  width: fit-content;
+  max-width: 100%;
+  color: var(--accent);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-underline-offset: 2px;
+}
+
+.topic-overview-citations span {
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.topic-overview-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topic-overview-error p {
+  color: var(--danger);
+}
+
 .discovery-heading,
 .source-comparison-heading,
 .discovery-category-heading {
@@ -392,6 +452,55 @@
 
 .filter-error {
   color: var(--danger);
+}
+
+.ai-relevance-disclosure {
+  margin: 0 0 10px;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ai-relevance-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px !important;
+  color: var(--text-1);
+  font-size: 11px;
+}
+
+.ai-relevance-toggle input {
+  accent-color: var(--accent);
+}
+
+.ai-relevance-badge {
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text-0);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.ai-relevance-result {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-1);
+}
+
+.ai-relevance-result h4 {
+  margin: 0 0 8px;
+}
+
+.ai-relevance-result p {
+  margin: 6px 0;
+  line-height: 1.5;
 }
 
 .active-filter-chips {

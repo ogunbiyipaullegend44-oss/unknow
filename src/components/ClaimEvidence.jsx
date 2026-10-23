@@ -21,10 +21,11 @@ export default function ClaimEvidence({ research }) {
     <div className="claim-evidence-workspace">
       <header className="claim-evidence-heading">
         <div>
-          <h3>Claims and evidence</h3>
+          <h3>Claims and evidence register</h3>
           <p>
-            Candidate statements are exact sentences selected by wording overlap with the research question. They are
-            not platform-verified facts, and no AI-generated claims are presented as findings.
+            A claim is a candidate statement: an exact sentence from retrieved source text that overlaps with the research
+            question. Evidence is the linked source passage and its context and provenance, shown so you can assess that
+            statement. Neither the statement nor its match is independently verified.
           </p>
         </div>
         <strong>{statements.length} evidence-linked statement{statements.length === 1 ? '' : 's'}</strong>
@@ -33,12 +34,12 @@ export default function ClaimEvidence({ research }) {
       <section className="claim-evidence-method" aria-label="Claim classification guide">
         <h4>How to interpret this register</h4>
         <ul>
-          <li><strong>Direct textual support:</strong> the displayed statement is an exact sentence from the linked retrieved passage.</li>
-          <li><strong>Reasonable interpretations:</strong> not generated; users must assess these against source context.</li>
-          <li><strong>AI synthesis:</strong> none is generated in this workflow.</li>
-          <li><strong>Uncertain or unsupported:</strong> not presented as established findings.</li>
+          <li><strong>Claim:</strong> the displayed candidate assertion, quoted exactly from retrieved text.</li>
+          <li><strong>Evidence:</strong> the source record, matching passage, surrounding context, and source details.</li>
+          <li><strong>Interpretation:</strong> not generated; assess what the passage supports, qualifies, or leaves uncertain.</li>
+          <li><strong>Verification:</strong> this register does not fact-check sources or automatically compare conflicting evidence.</li>
         </ul>
-        <p>Conflicting evidence is not automatically assessed. A source snippet or abstract may omit qualifications and does not establish that its statement is true.</p>
+        <p>A source snippet or abstract may omit qualifications; a textual match does not establish that a claim is true.</p>
       </section>
 
       {statements.length === 0 ? (
@@ -55,37 +56,45 @@ export default function ClaimEvidence({ research }) {
           {visibleStatements.map((statement, index) => (
             <article className="claim-evidence-card" key={statement.key}>
               <div className="claim-evidence-card-heading">
-                <span>Candidate statement {page * PAGE_SIZE + index + 1}</span>
+                <span>Claim {page * PAGE_SIZE + index + 1} · candidate statement</span>
                 <span>{statement.type}</span>
               </div>
-              <blockquote>{statement.text}</blockquote>
-              <p className="claim-evidence-caveat">
-                Direct support means the source passage contains this wording; it does not independently verify the claim.
-              </p>
-              <h4>Supporting source{statement.evidence.length === 1 ? '' : 's'}</h4>
-              {statement.evidence.map((evidence) => (
-                <details className="claim-evidence-source" key={evidence.sourceId}>
-                  <summary>
-                    <span>{evidence.title}</span>
-                    <small>{evidence.publicationDate} · {evidence.location}</small>
-                  </summary>
-                  <dl>
-                    <div><dt>Author or organization</dt><dd>{evidence.author || evidence.publisher || 'Not available'}</dd></div>
-                    <div><dt>Publisher</dt><dd>{evidence.publisher || 'Not available'}</dd></div>
-                    <div><dt>Publication date</dt><dd>{evidence.publicationDate}</dd></div>
-                    <div><dt>Retrieved from</dt><dd>{evidence.provider}</dd></div>
-                    <div><dt>Evidence location</dt><dd>{evidence.location}</dd></div>
-                    <div><dt>Support</dt><dd>Direct textual match; exact sentence shown above.</dd></div>
-                    <div><dt>Evidence context</dt><dd>{evidence.context}</dd></div>
-                    <div><dt>Conflicting evidence</dt><dd>Not assessed automatically.</dd></div>
-                    <div><dt>Limitation</dt><dd>{evidence.limitation}</dd></div>
-                    <div className="claim-evidence-original">
-                      <dt>Original source</dt>
-                      <dd><a href={evidence.url} target="_blank" rel="noopener noreferrer">Open original source</a></dd>
-                    </div>
-                  </dl>
-                </details>
-              ))}
+              <section className="claim-evidence-claim" aria-label="Candidate claim">
+                <h4>Claim</h4>
+                <blockquote>{statement.text}</blockquote>
+                <p className="claim-evidence-caveat">
+                  This is a candidate assertion quoted from retrieved text, not an independently verified fact.
+                </p>
+              </section>
+              <section className="claim-evidence-support" aria-label="Supporting evidence and source context">
+                <h4>Evidence and source context</h4>
+                <p className="claim-evidence-caveat">
+                  The matching passage and its source details are provided for review; textual support alone does not establish truth.
+                </p>
+                {statement.evidence.map((evidence) => (
+                  <details className="claim-evidence-source" key={evidence.sourceId}>
+                    <summary>
+                      <span>{evidence.title}</span>
+                      <small>{evidence.publicationDate} · {evidence.location}</small>
+                    </summary>
+                    <dl>
+                      <div><dt>Author or organization</dt><dd>{evidence.author || evidence.publisher || 'Not available'}</dd></div>
+                      <div><dt>Publisher</dt><dd>{evidence.publisher || 'Not available'}</dd></div>
+                      <div><dt>Publication date</dt><dd>{evidence.publicationDate}</dd></div>
+                      <div><dt>Retrieved from</dt><dd>{evidence.provider}</dd></div>
+                      <div><dt>Evidence location</dt><dd>{evidence.location}</dd></div>
+                      <div><dt>Matching passage</dt><dd>{evidence.passage}</dd></div>
+                      <div><dt>Evidence context</dt><dd>{evidence.context}</dd></div>
+                      <div><dt>Conflicting evidence</dt><dd>Not assessed automatically.</dd></div>
+                      <div><dt>Limitation</dt><dd>{evidence.limitation}</dd></div>
+                      <div className="claim-evidence-original">
+                        <dt>Original source</dt>
+                        <dd><a href={evidence.url} target="_blank" rel="noopener noreferrer">Open original source</a></dd>
+                      </div>
+                    </dl>
+                  </details>
+                ))}
+              </section>
             </article>
           ))}
           {pageCount > 1 && (

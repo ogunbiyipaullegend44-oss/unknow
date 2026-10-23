@@ -1,5 +1,10 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
+
+for (const [key, value] of Object.entries(loadEnv('development', process.cwd(), ''))) {
+  if (process.env[key] === undefined) process.env[key] = value;
+}
 
 const apiPath = fileURLToPath(new URL('../server/index.js', import.meta.url));
 const vitePath = fileURLToPath(new URL('../node_modules/vite/bin/vite.js', import.meta.url));

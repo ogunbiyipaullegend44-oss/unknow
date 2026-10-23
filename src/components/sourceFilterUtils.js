@@ -353,7 +353,16 @@ export function matchesSourceFilters(source, filters, context = {}, compiled = c
     ].filter((value) => typeof value === 'string' && value.trim()).join('. ');
     if (!assessQuestionContext(relevanceContent, filters.relevanceQuestion).relevant) return false;
   }
-  if (compiled.claim && !getText().includes(compiled.claim)) return false;
+  if (compiled.claim) {
+    const evidenceText = [
+      source.rawContent,
+      source.fullText,
+      source.description,
+      source.abstract,
+      source.evidence,
+    ].filter((value) => typeof value === 'string').join(' ').toLocaleLowerCase();
+    if (!evidenceText.includes(compiled.claim)) return false;
+  }
 
   return true;
 }

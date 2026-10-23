@@ -118,6 +118,14 @@
   justify-self: start;
 }
 
+.community-auth-form .community-forgot-password {
+  justify-self: end;
+  margin-top: -9px;
+  padding: 2px 0;
+  color: var(--accent);
+  font-size: 12px;
+}
+
 .community-auth-form.is-compact {
   margin: 16px 0 0;
   padding: 0;

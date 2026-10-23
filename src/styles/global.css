@@ -19,6 +19,26 @@ body,
   background: var(--bg-0);
 }
 
+.offline-notice {
+  position: fixed;
+  z-index: 3000;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  width: fit-content;
+  max-width: min(560px, calc(100vw - 24px));
+  margin: 0 auto;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-1);
+  color: var(--text-1);
+  box-shadow: var(--shadow-lg);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto,
     'Helvetica Neue', Arial, sans-serif;

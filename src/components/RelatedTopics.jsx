@@ -90,7 +90,7 @@ export default function RelatedTopics({ research }) {
       <div className="related-topics-heading">
         <div>
           <h3 id="related-topics-heading">Related topics and sources</h3>
-          <p>Each angle searches for additional sources independently. Results are grouped by the related topic they address.</p>
+          <p>Explore research directions connected to the main question. Each angle searches for additional sources independently; results here stay separate from the main source list and Claims &amp; evidence register.</p>
         </div>
       </div>
 

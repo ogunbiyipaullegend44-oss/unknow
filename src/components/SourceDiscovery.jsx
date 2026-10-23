@@ -8,7 +8,6 @@ import {
 import {
   assessQuestionContext,
   compileSourceFilters,
-  DATE_FILTERS,
   EVIDENCE_TYPES,
   matchesSourceFilters,
   ORGANIZATION_TYPES,
@@ -36,6 +35,9 @@ import './SourceDiscovery.css';
 
 const MAX_COMPARE_SOURCES = 5;
 const RESULTS_PER_CATEGORY = 12;
+const MAX_AI_ASSESSMENT_SOURCES = 50;
+const AI_REQUEST_BATCH_SIZE = 25;
+const MIN_AI_RELEVANCE_SCORE = 55;
 const INITIAL_FILTERS = {
   categories: [],
   datePreset: 'any',
@@ -173,13 +175,39 @@ function classifyItems(research) {
   });
 }
 
-function topicOverview(research) {
-  const subject = (research.analysis?.mainSubject || research.question)
-    .replace(/^(what|how|why|when|where|which)\s+(is|are|does|do|did|has|have|can|will)\s+/i, '')
-    .replace(/[?!.]+$/g, '')
-    .trim();
-  if (!subject) return '';
-  return `This topic examines ${subject}. It covers the relevant context, affected people and places, associated outcomes, and the evidence or responses that help explain the issue.`;
+function overviewSourceText(item) {
+  return [...new Set([
+    item.rawContent,
+    item.description,
+    item.abstract,
+    item.evidence,
+  ].filter((text) => typeof text === 'string' && text.trim()))]
+    .join('\n')
+    .slice(0, 3000);
+}
+
+function overviewDate(item) {
+  const timestamp = Date.parse(item.date);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function selectOverviewSources(items) {
+  return items
+    .filter((item) => overviewSourceText(item))
+    .sort((left, right) =>
+      Number(right.contextReview.relevant) - Number(left.contextReview.relevant) ||
+      overviewDate(right) - overviewDate(left) ||
+      Number(right.kind === 'web') - Number(left.kind === 'web'),
+    )
+    .slice(0, 8)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      date: item.date || '',
+      text: overviewSourceText(item),
+      url: item.url,
+      provider: item.provider,
+    }));
 }
 
 export default function SourceDiscovery({
@@ -201,10 +229,18 @@ export default function SourceDiscovery({
   const [categoryPages, setCategoryPages] = useState({});
   const [filters, setFilters] = useState(() => ({
     ...INITIAL_FILTERS,
-    relevanceQuestion: research.question,
     categories: research.relatedSourceCategories ?? [],
   }));
   const [notice, setNotice] = useState('');
+  const [aiScores, setAiScores] = useState({});
+  const [aiAssessmentQuestion, setAiAssessmentQuestion] = useState('');
+  const [aiFilterActive, setAiFilterActive] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [topicOverviewResult, setTopicOverviewResult] = useState(null);
+  const [topicOverviewLoading, setTopicOverviewLoading] = useState(false);
+  const [topicOverviewError, setTopicOverviewError] = useState('');
+  const [topicOverviewRetry, setTopicOverviewRetry] = useState(0);
   const [reviewStorageWarning, setReviewStorageWarning] = useState('');
   const [projectDialogItem, setProjectDialogItem] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState(savedProjects[0]?.id ?? '');
@@ -301,6 +337,60 @@ export default function SourceDiscovery({
   }, [research]);
 
   const items = classifiedItems;
+  const overviewSources = useMemo(() => selectOverviewSources(items), [items]);
+  const overviewSourceSignature = overviewSources.map(({ id }) => id).join('|');
+  useEffect(() => {
+    const controller = new AbortController();
+    setTopicOverviewResult(null);
+    setTopicOverviewError('');
+    setTopicOverviewLoading(true);
+
+    const sourcesById = new Map(overviewSources.map((source) => [source.id, source]));
+    fetch('/api/research/topic-overview', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        question: research.question,
+        sources: overviewSources.map(({ id, title, date, text }) => ({ id, title, date, text })),
+      }),
+      signal: controller.signal,
+    }).then(async (response) => {
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error('The AI topic overview returned an unreadable response.');
+      }
+      if (!response.ok) {
+        throw new Error(result.error || `The AI topic overview failed (${response.status}).`);
+      }
+      if (typeof result.definition !== 'string' ||
+        typeof result.currentSummary !== 'string' ||
+        !Array.isArray(result.sourceIds)) {
+        throw new Error('The AI returned an incomplete topic overview.');
+      }
+      return {
+        definition: result.definition,
+        currentSummary: result.currentSummary,
+        sources: result.sourceIds.map((id) => sourcesById.get(id)).filter(Boolean),
+      };
+    }).then((result) => {
+      setTopicOverviewResult(result);
+    }).catch((error) => {
+      if (error.name === 'AbortError') return;
+      setTopicOverviewError(error.message || 'The AI topic overview could not be generated.');
+    }).finally(() => {
+      if (!controller.signal.aborted) setTopicOverviewLoading(false);
+    });
+
+    return () => controller.abort();
+  }, [
+    overviewSourceSignature,
+    research.id,
+    research.question,
+    research.retrievedAt,
+    topicOverviewRetry,
+  ]);
   const filterContext = useMemo(
     () => ({ researchAreas: research.analysis.researchAreas }),
     [research.analysis.researchAreas],
@@ -309,14 +399,60 @@ export default function SourceDiscovery({
     () => compileSourceFilters(deferredFilters, filterContext),
     [deferredFilters, filterContext],
   );
-  const availableItems = useMemo(() => sortSources(classifiedItems
-    .filter((item) => !excludedIds.has(item.id))
-    .filter((item) => matchesSourceFilters(item, deferredFilters, filterContext, compiledFilters)), deferredFilters.sort)
-    .sort((left, right) =>
-      Number(right.contextReview.relevant) - Number(left.contextReview.relevant) ||
-      right.relevanceOverlap - left.relevanceOverlap,
-    ),
-  [classifiedItems, deferredFilters.sort, excludedIds, filterContext, compiledFilters]);
+  const availableItems = useMemo(() => {
+    const relevanceQuestion = deferredFilters.relevanceQuestion.trim() || research.question;
+    const useAiQuestion = aiFilterActive &&
+      aiAssessmentQuestion === relevanceQuestion;
+    const assessmentMatchesQuestion = aiAssessmentQuestion === relevanceQuestion &&
+      Object.keys(aiScores).length > 0;
+    const noStrongAiMatches = assessmentMatchesQuestion &&
+      !Object.values(aiScores).some(({ score }) => score >= MIN_AI_RELEVANCE_SCORE);
+    const filtersToApply = useAiQuestion || noStrongAiMatches || !deferredFilters.relevanceQuestion.trim()
+      ? { ...deferredFilters, relevanceQuestion: '' }
+      : deferredFilters;
+    const compiled = useAiQuestion || noStrongAiMatches
+      ? compileSourceFilters(filtersToApply, filterContext)
+      : compiledFilters;
+    const matches = classifiedItems
+      .filter((item) => !excludedIds.has(item.id))
+      .filter((item) => matchesSourceFilters(item, filtersToApply, filterContext, compiled));
+    const sorted = sortSources(matches, deferredFilters.sort);
+    if (!useAiQuestion) return sorted;
+    const originalOrder = new Map(sorted.map((item, index) => [item.id, index]));
+    return sorted
+      .filter((item) => (aiScores[item.id]?.score ?? -1) >= MIN_AI_RELEVANCE_SCORE)
+      .sort((left, right) =>
+        aiScores[right.id].score - aiScores[left.id].score ||
+        originalOrder.get(left.id) - originalOrder.get(right.id),
+      );
+  }, [
+    aiAssessmentQuestion,
+    aiFilterActive,
+    aiScores,
+    classifiedItems,
+    deferredFilters,
+    excludedIds,
+    filterContext,
+    compiledFilters,
+    research.question,
+  ]);
+  const aiCandidates = useMemo(() => {
+    const filtersWithoutKeywordRelevance = { ...deferredFilters, relevanceQuestion: '' };
+    const compiledWithoutKeywordRelevance = compileSourceFilters(
+      filtersWithoutKeywordRelevance,
+      filterContext,
+    );
+    return sortSources(classifiedItems
+      .filter((item) => !excludedIds.has(item.id))
+      .filter((item) => matchesSourceFilters(
+        item,
+        filtersWithoutKeywordRelevance,
+        filterContext,
+        compiledWithoutKeywordRelevance,
+      )), deferredFilters.sort)
+      .slice(0, MAX_AI_ASSESSMENT_SOURCES);
+  }, [classifiedItems, deferredFilters, excludedIds, filterContext]);
+  const aiCandidateSignature = aiCandidates.map((item) => item.id).join('|');
   const filterChips = useMemo(
     () => removableFilterChips(filters, (key, value) => {
       setFilters((current) => {
@@ -377,14 +513,21 @@ export default function SourceDiscovery({
     setExcludedIds(new Set());
     setComparedIds(new Set());
     setCategoryPages({});
+    setAiScores({});
+    setAiAssessmentQuestion('');
+    setAiFilterActive(false);
+    setAiError('');
   }, [research.retrievedAt]);
 
   useEffect(() => {
     setFilters({
       ...INITIAL_FILTERS,
-      relevanceQuestion: research.question,
       categories: research.relatedSourceCategories ?? [],
     });
+    setAiScores({});
+    setAiAssessmentQuestion('');
+    setAiFilterActive(false);
+    setAiError('');
   }, [research.id]);
 
   useEffect(() => {
@@ -394,9 +537,12 @@ export default function SourceDiscovery({
   const clearAllFilters = () => {
     setFilters({
       ...INITIAL_FILTERS,
-      relevanceQuestion: research.question,
     });
     setExcludedIds(new Set());
+    setAiScores({});
+    setAiAssessmentQuestion('');
+    setAiFilterActive(false);
+    setAiError('');
   };
 
   const toggleFilterValue = (key, value) => {
@@ -408,25 +554,161 @@ export default function SourceDiscovery({
     }));
   };
 
+  const assessRelevanceWithAi = async () => {
+    const question = filters.relevanceQuestion.trim() || research.question;
+    if (question.length < 8) {
+      setAiError('Enter a topic or question with at least 8 characters before assessing relevance.');
+      return;
+    }
+    if (!aiCandidates.length) {
+      setAiError('No sources match the other filters to assess. Clear or adjust filters and try again.');
+      return;
+    }
+
+    setAiBusy(true);
+    setAiError('');
+    setAiFilterActive(false);
+    setAiScores({});
+    setAiAssessmentQuestion(question);
+    try {
+      const assessments = {};
+      for (let offset = 0; offset < aiCandidates.length; offset += AI_REQUEST_BATCH_SIZE) {
+        const batch = aiCandidates.slice(offset, offset + AI_REQUEST_BATCH_SIZE);
+        const response = await fetch('/api/research/ai-relevance', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            sources: batch.map((item) => ({
+              id: item.id,
+              title: item.title.slice(0, 500),
+              text: [...new Set([
+                item.rawContent,
+                item.description,
+                item.abstract,
+                item.evidence,
+              ].filter((text) => typeof text === 'string' && text.trim()))]
+                .join('\n')
+                .slice(0, 2500),
+            })),
+          }),
+        });
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          throw new Error('The AI relevance service returned an unreadable response.');
+        }
+        if (!response.ok) {
+          throw new Error(result.error || 'AI relevance assessment could not be completed.');
+        }
+        if (!Array.isArray(result.evaluations) || result.evaluations.length !== batch.length) {
+          throw new Error('The AI returned an incomplete assessment. No scores were applied.');
+        }
+        const expectedIds = new Set(batch.map((item) => item.id));
+        for (const evaluation of result.evaluations) {
+          if (!expectedIds.has(evaluation.id) ||
+            !Number.isInteger(evaluation.score) ||
+            evaluation.score < 0 ||
+            evaluation.score > 100 ||
+            typeof evaluation.reason !== 'string' ||
+            typeof evaluation.context !== 'string') {
+            throw new Error('The AI returned an invalid assessment. No scores were applied.');
+          }
+          assessments[evaluation.id] = {
+            score: evaluation.score,
+            reason: evaluation.reason,
+            context: evaluation.context,
+          };
+        }
+      }
+      setAiScores(assessments);
+      const strongMatches = Object.values(assessments)
+        .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length;
+      setAiFilterActive(strongMatches > 0);
+      setNotice(strongMatches
+        ? `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}”; ${strongMatches} met the strong contextual-match threshold. Scores indicate topical relevance, not factual accuracy or source quality.`
+        : `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}” but found no strong contextual matches. All retrieved sources remain available for manual review.`);
+    } catch (error) {
+      setAiScores({});
+      setAiError(error.message || 'AI relevance assessment could not be completed.');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const autoAiResearchKey = useRef('');
+  useEffect(() => {
+    if (!aiCandidates.length ||
+      (filters.relevanceQuestion.trim() && filters.relevanceQuestion !== research.question)) return;
+    const researchKey = `${research.id}:${research.retrievedAt}`;
+    if (autoAiResearchKey.current === researchKey) return;
+    autoAiResearchKey.current = researchKey;
+    assessRelevanceWithAi();
+  }, [aiCandidateSignature, filters.relevanceQuestion, research.id, research.question, research.retrievedAt]);
+
+  const aiStrongMatchCount = Object.values(aiScores)
+    .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length;
   const availableCategories = [...new Set(classifiedItems.map((item) => item.category))];
   const availableOrganizations = [...new Set(classifiedItems.flatMap((item) => item.organizationTypes))];
   const availableEvidence = [...new Set(classifiedItems.flatMap((item) => item.evidenceTypes))];
-  const dateLimitedCount = items.filter((item) => !item.date).length;
   const organizationMetadataMissingCount = items.filter((item) =>
     !item.organization && !item.publisher && !item.author,
   ).length;
   const evidenceMetadataMissingCount = items.filter((item) =>
     !item.type && !item.description && !item.abstract,
   ).length;
-  const yearOnlyDateCount = items.filter((item) => /^\d{4}$/.test(String(item.date ?? ''))).length;
-  const invalidDateRange = filters.datePreset === 'custom' &&
-    filters.startDate && filters.endDate && filters.startDate > filters.endDate;
-
   return (
     <div className="discovery-workspace">
-      <section className="source-result-overview" aria-labelledby="source-result-overview-title">
+      <section className="source-result-overview" aria-labelledby="source-result-overview-title" aria-live="polite">
         <h3 id="source-result-overview-title">Topic overview</h3>
-        <p>{topicOverview(research)}</p>
+        <p className="topic-overview-disclosure">
+          AI explains the topic, then summarizes information from up to eight retrieved source descriptions or abstracts.
+          The cited source records are shown below; this overview is not independently verified. The research question and selected source text are sent to the configured AI provider; usage may incur charges.
+        </p>
+        <p className="topic-overview-disclosure" role={aiBusy ? 'status' : undefined}>
+          {aiBusy
+            ? `AI is checking up to ${aiCandidates.length} retrieved sources against your research question.`
+            : aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && Object.keys(aiScores).length
+              ? `AI assessed ${Object.keys(aiScores).length} sources; ${aiStrongMatchCount} met the strong contextual-match threshold. Scores indicate topic relevance, not factual accuracy or source credibility.${aiStrongMatchCount === 0 ? ' All retrieved sources remain available for manual review.' : ''}`
+              : aiError
+                ? `AI source matching did not complete: ${aiError} Retrieved sources remain available for review.`
+                : 'AI will assess retrieved source text against your research question; scores indicate relevance, not factual accuracy.'}
+        </p>
+        {topicOverviewLoading && <p role="status">Generating a topic definition and checking the retrieved sources for current developments…</p>}
+        {topicOverviewError && (
+          <div className="topic-overview-error" role="alert">
+            <p>Topic overview could not be generated: {topicOverviewError}</p>
+            <p className="filter-limitation">
+              Local development requires <code>ANTHROPIC_API_KEY</code> in the project-root <code>.env.local</code>; restart <code>npm run dev</code> after adding it. Hosted use requires the API routes and key in the Vercel deployment.
+            </p>
+            <button className="btn btn-secondary" type="button" onClick={() => setTopicOverviewRetry((retry) => retry + 1)}>
+              Retry topic overview
+            </button>
+          </div>
+        )}
+        {topicOverviewResult && (
+          <div className="topic-overview-content">
+            <div>
+              <h4>What the topic means</h4>
+              <p>{topicOverviewResult.definition}</p>
+            </div>
+            <div>
+              <h4>Current developments in retrieved sources</h4>
+              <p>{topicOverviewResult.currentSummary}</p>
+              {topicOverviewResult.sources.length > 0 && (
+                <ul className="topic-overview-citations" aria-label="Sources for current developments">
+                  {topicOverviewResult.sources.map((source) => (
+                    <li key={source.id}>
+                      <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
+                      <span>{[source.provider, source.date].filter(Boolean).join(' · ')}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <div
@@ -507,21 +789,7 @@ export default function SourceDiscovery({
             </fieldset>
 
             <fieldset className="filter-section">
-              <legend>Publication date</legend>
-              <label className="filter-inline-label">
-                <span>Date range</span>
-                <select value={filters.datePreset} onChange={(event) => setFilters((current) => ({ ...current, datePreset: event.target.value }))}>
-                  <option value="any">Any date</option>
-                  {DATE_FILTERS.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
-                  <option value="custom">Custom date range</option>
-                </select>
-              </label>
-              {filters.datePreset === 'custom' && (
-                <div className="filter-date-range">
-                  <label><span>From</span><input type="date" value={filters.startDate} onChange={(event) => setFilters((current) => ({ ...current, startDate: event.target.value }))} /></label>
-                  <label><span>To</span><input type="date" value={filters.endDate} onChange={(event) => setFilters((current) => ({ ...current, endDate: event.target.value }))} /></label>
-                </div>
-              )}
+              <legend>Sort sources</legend>
               <label className="filter-inline-label">
                 <span>Sort by</span>
                 <select value={filters.sort} onChange={(event) => setFilters((current) => ({ ...current, sort: event.target.value }))}>
@@ -529,13 +797,6 @@ export default function SourceDiscovery({
                   <option value="oldest">Oldest first</option>
                 </select>
               </label>
-              {filters.datePreset !== 'any' && dateLimitedCount > 0 && (
-                <p className="filter-limitation">{dateLimitedCount} source{dateLimitedCount === 1 ? ' has' : 's have'} no publication date and cannot be matched to the selected date range. Retrieval time is not used as publication date.</p>
-              )}
-              {filters.datePreset !== 'any' && yearOnlyDateCount > 0 && (
-                <p className="filter-limitation">{yearOnlyDateCount} source{yearOnlyDateCount === 1 ? ' has' : 's have'} a year-only publication date. These records are matched by year; month/day precision is unavailable.</p>
-              )}
-              {invalidDateRange && <p className="filter-error" role="alert">The start date must be on or before the end date.</p>}
             </fieldset>
 
             <fieldset className="filter-section">
@@ -615,9 +876,49 @@ export default function SourceDiscovery({
                 <input value={filters.claim} onChange={(event) => setFilters((current) => ({ ...current, claim: event.target.value }))} placeholder="Match this exact wording in retrieved text" />
               </label>
               <label className="filter-inline-label">
-                <span>Question or topic relevance</span>
-                <input value={filters.relevanceQuestion} onChange={(event) => setFilters((current) => ({ ...current, relevanceQuestion: event.target.value }))} placeholder="Require words from this question or topic" />
+                <span>Optional question-context filter</span>
+                <input value={filters.relevanceQuestion} onChange={(event) => {
+                  setFilters((current) => ({ ...current, relevanceQuestion: event.target.value }));
+                  setAiScores({});
+                  setAiAssessmentQuestion('');
+                  setAiFilterActive(false);
+                  setAiError('');
+                }} placeholder="Optional: match this topic in retrieved source text" />
               </label>
+            </fieldset>
+
+            <fieldset className="filter-section">
+              <legend>AI topical match</legend>
+              <p className="ai-relevance-disclosure">
+                AI automatically assesses up to {MAX_AI_ASSESSMENT_SOURCES} retrieved sources for every research topic. It compares the question with source text in context; a title or keyword match alone is not enough. The question and source titles/text are sent to Anthropic; API usage may incur charges. Scores estimate topical relevance, not factual accuracy or source credibility. The optional question-context filter above is an additional filter; leave it blank to keep results visible if AI is unavailable.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={aiBusy || aiCandidates.length === 0}
+                onClick={assessRelevanceWithAi}
+              >
+                {aiBusy ? 'Assessing sources with AI…' : aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && Object.keys(aiScores).length
+                  ? `Reassess ${aiCandidates.length} sources with AI`
+                  : `Assess up to ${aiCandidates.length} sources with AI`}
+              </button>
+              {aiScores && Object.keys(aiScores).length > 0 && (
+                <label className="filter-inline-label ai-relevance-toggle">
+                  <input
+                    type="checkbox"
+                    checked={aiFilterActive && aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question)}
+                    onChange={(event) => setAiFilterActive(event.target.checked)}
+                  />
+                  <span>Show strong AI matches only ({MIN_AI_RELEVANCE_SCORE}+ / 100)</span>
+                </label>
+              )}
+              {aiBusy && <p className="filter-limitation" role="status">Assessing up to {aiCandidates.length} sources. Each source uses only retrieved titles and text.</p>}
+              {aiError && <p className="discovery-warning" role="alert">{aiError}</p>}
+              {aiError && (
+                <p className="filter-limitation">
+                  Vercel environment variables are not available to local development. For local AI, add <code>ANTHROPIC_API_KEY</code> to the project-root <code>.env.local</code> and restart <code>npm run dev</code>.
+                </p>
+              )}
             </fieldset>
 
             <fieldset className="filter-section">
@@ -719,8 +1020,6 @@ export default function SourceDiscovery({
         </section>
       )}
 
-      {invalidDateRange && <p className="filter-error" role="alert">The custom date range is invalid because its start date is after its end date.</p>}
-
       {categories.length === 0 ? (
         <div className="source-empty">
           <h3>{items.length ? 'No sources match this filter' : 'No source records were discovered'}</h3>
@@ -745,9 +1044,23 @@ export default function SourceDiscovery({
                   <span className="source-type">{category}</span>
                   <span>{sourceDateLabel(item.date)}</span>
                 </div>
+                {aiScores[item.id] && aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && (
+                  <p className="ai-relevance-badge">AI topical match: {aiScores[item.id].score}/100</p>
+                )}
                 <h3>{item.title}</h3>
                 <details className="discovery-details" name="source-details">
                   <summary>Details</summary>
+                  {aiScores[item.id] && aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && (
+                    <section className="ai-relevance-result" aria-label="AI topical relevance assessment">
+                      <h4>AI topical relevance</h4>
+                      <p><strong>Score:</strong> {aiScores[item.id].score}/100</p>
+                      <p><strong>Why it matches:</strong> {aiScores[item.id].reason || 'No explanation returned.'}</p>
+                      <p><strong>Supporting source text:</strong> {aiScores[item.id].context
+                        ? `“${aiScores[item.id].context}”`
+                        : 'No exact supporting excerpt was identified in the retrieved text.'}</p>
+                      <p className="filter-limitation">AI relevance is an estimate based on retrieved text, not a fact-check, quality rating, or review of the original source.</p>
+                    </section>
+                  )}
                   <dl className="discovery-metadata">
                     <div><dt>Author / organization</dt><dd>{item.author || 'Not available'}</dd></div>
                     <div><dt>Publisher / website</dt><dd>{item.publisher || 'Not available'}</dd></div>

@@ -73,6 +73,32 @@ test('source filters act on actual source text and category metadata', () => {
   }), false);
 });
 
+test('an empty optional question-context filter keeps otherwise matching sources visible', () => {
+  const unrelatedSource = source({
+    title: 'Coastal flood insurance market report',
+    description: 'A report on flood insurance in coastal regions.',
+    abstract: 'The study examines insurance coverage and flood risk.',
+  });
+
+  assert.equal(matchesSourceFilters(unrelatedSource, BASE_FILTERS), true);
+});
+
+test('claim filter matches retrieved source content, not title or organization metadata', () => {
+  const item = source();
+  assert.equal(matchesSourceFilters(item, {
+    ...BASE_FILTERS,
+    claim: 'survey in nairobi',
+  }), true);
+  assert.equal(matchesSourceFilters(item, {
+    ...BASE_FILTERS,
+    claim: 'urban air quality case study',
+  }), false);
+  assert.equal(matchesSourceFilters(item, {
+    ...BASE_FILTERS,
+    claim: 'example university',
+  }), false);
+});
+
 test('compiled filters reuse normalized source text without changing filter results', () => {
   const item = source();
   const filters = {
@@ -232,10 +258,17 @@ test('accessibility filters require an actual link or available abstract', () =>
 });
 
 test('sort order keeps records without dates after dated records', () => {
-  const ordered = sortSources([
+  const records = [
     source({ id: 'unknown', date: '' }),
     source({ id: 'older', date: '2020' }),
     source({ id: 'newer', date: '2024' }),
-  ], 'newest');
-  assert.deepEqual(ordered.map((item) => item.id), ['newer', 'older', 'unknown']);
+  ];
+  assert.deepEqual(
+    sortSources(records, 'newest').map((item) => item.id),
+    ['newer', 'older', 'unknown'],
+  );
+  assert.deepEqual(
+    sortSources(records, 'oldest').map((item) => item.id),
+    ['older', 'newer', 'unknown'],
+  );
 });

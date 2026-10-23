@@ -1,20 +1,27 @@
-const CACHE_NAME = 'attis-app-shell-v1';
+const CACHE_NAME = 'attis-app-shell-v2';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/brinfolynk-mark.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       await cache.addAll(APP_SHELL);
-      const html = await (await cache.match('/index.html')).text();
-      const entryAssets = [...html.matchAll(/(?:src|href)="([^"]+\/assets\/[^"]+)"/g)]
-        .map((match) => match[1]);
-      await cache.addAll(entryAssets);
+      const manifestResponse = await fetch('/asset-manifest.json');
+      if (!manifestResponse.ok) {
+        throw new Error(`Could not load the offline asset manifest (${manifestResponse.status}).`);
+      }
+      const manifest = await manifestResponse.json();
+      const assets = new Set(['/asset-manifest.json']);
+      for (const entry of Object.values(manifest)) {
+        for (const file of [entry.file, ...(entry.css ?? []), ...(entry.assets ?? [])]) {
+          if (file) assets.add(`/${file}`);
+        }
+      }
+      await cache.addAll([...assets]);
     }),
   );
 });

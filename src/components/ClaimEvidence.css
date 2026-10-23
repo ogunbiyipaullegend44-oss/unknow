@@ -12,7 +12,9 @@
 
 .claim-evidence-heading h3,
 .claim-evidence-method h4,
-.claim-evidence-empty h4 {
+.claim-evidence-empty h4,
+.claim-evidence-claim h4,
+.claim-evidence-support h4 {
   margin: 0 0 8px;
 }
 
@@ -50,6 +52,20 @@
 .claim-evidence-list {
   display: grid;
   gap: 12px;
+}
+
+.claim-evidence-claim {
+  margin-top: 14px;
+}
+
+.claim-evidence-support {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.claim-evidence-support > .claim-evidence-caveat {
+  margin-bottom: 8px;
 }
 
 .claim-evidence-pagination {

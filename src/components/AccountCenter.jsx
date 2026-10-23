@@ -72,6 +72,13 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
 
   const isAuthenticated = Boolean(user);
   const interestsText = useMemo(() => profile.research_interests.join(', '), [profile.research_interests]);
+  const sectionTitle = section === 'profile'
+    ? 'Profile'
+    : section === 'settings'
+      ? 'Settings'
+      : section === 'privacy'
+        ? 'Privacy & Data'
+        : 'Security';
 
   useEffect(() => {
     if (!user || !neon) return undefined;
@@ -261,12 +268,24 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
     }
   };
 
+  const handleSignOut = async () => {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await signOut();
+    } catch (signOutError) {
+      setError(`Could not sign out: ${signOutError.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (authLoading) return <p className="account-state" role="status">Checking your account…</p>;
   if (!isAuthenticated) {
     return (
       <section className="account-center">
-        <p className="research-eyebrow">Private account</p>
-        <h1>Profile &amp; Settings</h1>
+        <h1>{sectionTitle}</h1>
         <p>Sign in with your existing Community Hub account to manage a private profile and sync supported preferences.</p>
         {error && <p className="account-message account-error" role="alert">{error}</p>}
         {notice && <p className="account-message account-success" role="status">{notice}</p>}
@@ -278,18 +297,15 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
   return (
     <section className="account-center" aria-labelledby="account-center-title">
       <p className="research-eyebrow">Your account</p>
-      <h1 id="account-center-title">
-        {section === 'profile'
-          ? 'Profile'
-          : section === 'settings'
-            ? 'Settings'
-            : section === 'privacy'
-              ? 'Privacy & Data'
-              : 'Security'}
-      </h1>
+      <h1 id="account-center-title">{sectionTitle}</h1>
       {loadingProfile && <p className="account-state" role="status">Loading your private profile…</p>}
       {error && <p className="account-message account-error" role="alert">{error}</p>}
       {notice && <p className="account-message account-success" role="status">{notice}</p>}
+      <div className="account-actions">
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSignOut}>
+          {busy ? 'Signing out…' : 'Sign out'}
+        </button>
+      </div>
 
       {!loadingProfile && section === 'profile' && !editingProfile && (
         <section className="account-card">
@@ -440,9 +456,6 @@ export default function AccountCenter({ section = 'profile', onSectionChange }) 
             <p>Profile details and profile photos are private to your account. Community publications and related records are shared according to their publication and moderation status. Research history, saved collections, and mapping projects remain in this browser and are not uploaded to your account.</p>
             <p className="account-muted">Account deletion is not available in this app yet. Contact the project administrator to request removal of your Neon Auth account and associated community data.</p>
           </section>
-          <div className="account-actions">
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => signOut().catch((signOutError) => setError(`Could not sign out: ${signOutError.message}`))}>Sign out</button>
-          </div>
         </div>
       )}
     </section>

@@ -1577,13 +1577,13 @@ export default function ResearchDiscovery({
                 aria-current={view === 'related-topics' ? 'page' : undefined}
                 onClick={() => setView('related-topics')}
               >
-                Related ({research.analysis.researchAreas.length})
+                Related
               </button>
               <button type="button" aria-current={view === 'videos' ? 'page' : undefined} onClick={() => setView('videos')}>
                 Video ({(research.videos ?? []).length})
               </button>
               <button type="button" aria-current={view === 'claims' ? 'page' : undefined} onClick={() => setView('claims')}>
-                Claims and evidence
+                Claims &amp; evidence
               </button>
               <button type="button" aria-current={view === 'research-gaps' ? 'page' : undefined} onClick={() => setView('research-gaps')}>
                 Explore

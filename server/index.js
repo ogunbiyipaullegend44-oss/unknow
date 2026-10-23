@@ -7,11 +7,24 @@ import {
   compactResearchTopicQuery,
 } from '../src/utils/researchQuery.js';
 import {
+  buildCurrentAffairsSearchQuery,
+  currentAffairsTimeRange,
+  isCurrentAffairsSearch,
+} from '../src/utils/researchSearchIntent.js';
+import {
   analyzeQuestion,
   normalizeSources,
   SOURCE_LIMIT_ALL,
   validateResearchRequest,
 } from './research.js';
+import {
+  assessSourceRelevance,
+  validateAiRelevanceRequest,
+} from './aiRelevance.js';
+import {
+  generateAiTopicOverview,
+  validateAiTopicOverviewRequest,
+} from './aiTopicOverview.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = join(ROOT, 'dist');
@@ -529,7 +542,11 @@ async function discoverWebSources(question, fetchImpl, {
   googleSearchApiKey = '',
   googleSearchEngineId = '',
 } = {}) {
-  const search = buildResearchSearchQuery(question, region);
+  const currentAffairs = isCurrentAffairsSearch(question, { year, month, fromYear, toYear });
+  const search = currentAffairs
+    ? buildCurrentAffairsSearchQuery(question, region)
+    : buildResearchSearchQuery(question, region);
+  const currentTimeRange = currentAffairs ? currentAffairsTimeRange(question) : '';
   const requests = [];
   const names = [];
   const dateRange = videoDateRange(year, month, fromYear, toYear);
@@ -546,6 +563,9 @@ async function discoverWebSources(question, fetchImpl, {
         'sort',
         `date:r:${compactDate(dateRange.start)}:${compactDate(dateRange.end)}`,
       );
+    } else if (currentAffairs) {
+      googleUrl.searchParams.set('dateRestrict', currentTimeRange === 'year' ? 'y1' : 'd30');
+      googleUrl.searchParams.set('sort', 'date');
     }
     const request = requestProvider(googleUrl, 'Google Search', fetchImpl)
       .then((data) => {
@@ -579,12 +599,13 @@ async function discoverWebSources(question, fetchImpl, {
       body: JSON.stringify({
         api_key: tavilyApiKey,
         query: search,
-        topic: 'general',
-        search_depth: 'basic',
+        topic: currentAffairs ? 'news' : 'general',
+        search_depth: currentAffairs ? 'advanced' : 'basic',
         max_results: 20,
         include_answer: false,
         include_raw_content: true,
         ...(dateRange ? { start_date: dateRange.start, end_date: dateRange.end } : {}),
+        ...(currentAffairs && !dateRange ? { time_range: currentTimeRange } : {}),
       }),
     }).then((data) => {
       if (!Array.isArray(data.results)) throw new Error('Tavily returned an unexpected response.');
@@ -602,6 +623,8 @@ async function discoverWebSources(question, fetchImpl, {
     braveUrl.searchParams.set('text_decorations', 'false');
     if (dateRange) {
       braveUrl.searchParams.set('freshness', `${dateRange.start}to${dateRange.end}`);
+    } else if (currentAffairs) {
+      braveUrl.searchParams.set('freshness', currentTimeRange === 'year' ? 'py' : 'pm');
     }
     const request = requestProvider(braveUrl, 'Brave Search', fetchImpl, {
       headers: { 'x-subscription-token': braveApiKey },
@@ -1051,8 +1074,11 @@ export function createRequestHandler({
   googleSearchApiKey = process.env.GOOGLE_SEARCH_API_KEY || '',
   googleSearchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID || '',
   youtubeApiKey = process.env.YOUTUBE_API_KEY || '',
+  anthropicApiKey = process.env.ANTHROPIC_API_KEY || '',
+  anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
 } = {}) {
   const requestsByAddress = new Map();
+  const aiRequestsByAddress = new Map();
   const trendingCache = { value: null, expiresAt: 0, pending: null };
 
   return async (request, response) => {
@@ -1070,6 +1096,10 @@ export function createRequestHandler({
           tavily: Boolean(tavilyApiKey),
           brave: Boolean(braveApiKey),
           google: Boolean(googleSearchApiKey && googleSearchEngineId),
+        },
+        aiProviders: {
+          anthropic: Boolean(anthropicApiKey),
+          model: anthropicModel,
         },
       });
       return;
@@ -1092,6 +1122,84 @@ export function createRequestHandler({
         });
       } finally {
         trendingCache.pending = null;
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/research/topic-overview' && request.method === 'POST') {
+      const address = request.socket?.remoteAddress || 'unknown';
+      const now = Date.now();
+      const current = aiRequestsByAddress.get(address);
+      if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+        aiRequestsByAddress.set(address, { startedAt: now, count: 0 });
+      }
+      const limit = aiRequestsByAddress.get(address);
+      limit.count += 1;
+      if (limit.count > 10) {
+        sendJson(response, 429, {
+          error: 'Too many AI requests were sent from this device. Please wait 15 minutes and try again.',
+        });
+        return;
+      }
+
+      try {
+        const body = await readJson(request);
+        const validationError = validateAiTopicOverviewRequest(body);
+        if (validationError) {
+          sendJson(response, 400, { error: validationError });
+          return;
+        }
+        const overview = await generateAiTopicOverview({
+          question: body.question.trim(),
+          sources: body.sources,
+          apiKey: anthropicApiKey,
+          model: anthropicModel,
+          fetchImpl,
+        });
+        sendJson(response, 200, overview);
+      } catch (error) {
+        sendJson(response, error.status || 502, {
+          error: error.message || 'AI topic overview could not be generated.',
+        });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/research/ai-relevance' && request.method === 'POST') {
+      const address = request.socket?.remoteAddress || 'unknown';
+      const now = Date.now();
+      const current = aiRequestsByAddress.get(address);
+      if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+        aiRequestsByAddress.set(address, { startedAt: now, count: 0 });
+      }
+      const limit = aiRequestsByAddress.get(address);
+      limit.count += 1;
+      if (limit.count > 10) {
+        sendJson(response, 429, {
+          error: 'Too many AI relevance requests were sent from this device. Please wait 15 minutes and try again.',
+        });
+        return;
+      }
+
+      try {
+        const body = await readJson(request);
+        const validationError = validateAiRelevanceRequest(body);
+        if (validationError) {
+          sendJson(response, 400, { error: validationError });
+          return;
+        }
+        const evaluations = await assessSourceRelevance({
+          question: body.question.trim(),
+          sources: body.sources,
+          apiKey: anthropicApiKey,
+          model: anthropicModel,
+          fetchImpl,
+        });
+        sendJson(response, 200, { evaluations, model: anthropicModel });
+      } catch (error) {
+        sendJson(response, error.status || 502, {
+          error: error.message || 'AI relevance assessment could not be completed.',
+        });
       }
       return;
     }
