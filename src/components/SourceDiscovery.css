@@ -21,11 +21,6 @@
   line-height: 1.55;
 }
 
-.topic-overview-disclosure {
-  color: var(--text-2) !important;
-  font-size: 12px !important;
-}
-
 .topic-overview-content {
   display: grid;
   gap: 14px;

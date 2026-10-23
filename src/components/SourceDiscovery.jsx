@@ -654,8 +654,6 @@ export default function SourceDiscovery({
     assessRelevanceWithAi();
   }, [aiCandidateSignature, filters.relevanceQuestion, research.id, research.question, research.retrievedAt]);
 
-  const aiStrongMatchCount = Object.values(aiScores)
-    .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length;
   const availableCategories = [...new Set(classifiedItems.map((item) => item.category))];
   const availableOrganizations = [...new Set(classifiedItems.flatMap((item) => item.organizationTypes))];
   const availableEvidence = [...new Set(classifiedItems.flatMap((item) => item.evidenceTypes))];
@@ -669,19 +667,6 @@ export default function SourceDiscovery({
     <div className="discovery-workspace">
       <section className="source-result-overview" aria-labelledby="source-result-overview-title" aria-live="polite">
         <h3 id="source-result-overview-title">Topic overview</h3>
-        <p className="topic-overview-disclosure">
-          AI explains the topic, then summarizes information from up to eight retrieved source descriptions or abstracts.
-          The cited source records are shown below; this overview is not independently verified. The research question and selected source text are sent to the configured AI provider; usage may incur charges.
-        </p>
-        <p className="topic-overview-disclosure" role={aiBusy ? 'status' : undefined}>
-          {aiBusy
-            ? `AI is checking up to ${aiCandidates.length} retrieved sources against your research question.`
-            : aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && Object.keys(aiScores).length
-              ? `AI assessed ${Object.keys(aiScores).length} sources; ${aiStrongMatchCount} met the strong contextual-match threshold. Scores indicate topic relevance, not factual accuracy or source credibility.${aiStrongMatchCount === 0 ? ' All retrieved sources remain available for manual review.' : ''}`
-              : aiError
-                ? `AI source matching did not complete: ${aiError} Retrieved sources remain available for review.`
-                : 'AI will assess retrieved source text against your research question; scores indicate relevance, not factual accuracy.'}
-        </p>
         {topicOverviewLoading && <p role="status">Generating a topic definition and checking the retrieved sources for current developments…</p>}
         {topicOverviewError && (
           <div className="topic-overview-error" role="alert">
