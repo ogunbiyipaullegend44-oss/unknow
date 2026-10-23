@@ -1,9 +1,13 @@
-const CACHE_NAME = 'attis-app-shell-v2';
+const CACHE_NAME = 'attis-app-shell-v3';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/brinfolynk-mark.png',
+  '/brinfolynk-180.png',
+  '/brinfolynk-192.png',
+  '/brinfolynk-512.png',
+  '/brinfolynk-splash.png',
 ];
 
 self.addEventListener('install', (event) => {

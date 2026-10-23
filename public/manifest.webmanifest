@@ -5,13 +5,19 @@
   "description": "Research discovery, source review, evidence, and geographic context.",
   "start_url": "/",
   "scope": "/",
-  "display": "browser",
+  "display": "standalone",
   "background_color": "#111827",
   "theme_color": "#111827",
   "icons": [
     {
-      "src": "/brinfolynk-mark.png",
-      "sizes": "260x260",
+      "src": "/brinfolynk-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brinfolynk-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }

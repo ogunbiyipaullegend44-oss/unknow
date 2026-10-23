@@ -4,6 +4,7 @@ import { useAppConfig } from './context/AppConfigContext.jsx';
 import Landing from './components/Landing.jsx';
 import ProjectView from './components/ProjectView.jsx';
 import ResetPasswordPage from './components/ResetPasswordPage.jsx';
+import InstallPrompt from './components/InstallPrompt.jsx';
 
 export default function App() {
   const { project } = useProject();
@@ -46,6 +47,7 @@ export default function App() {
           You’re offline. Saved work stays available; live research, maps, and account features need internet.
         </div>
       )}
+      <InstallPrompt />
       {screen}
     </>
   );
