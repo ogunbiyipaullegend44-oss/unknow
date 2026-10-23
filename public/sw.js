@@ -1,4 +1,4 @@
-const CACHE_NAME = 'attis-app-shell-v6';
+const CACHE_NAME = 'attis-app-shell-v7';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -51,17 +51,24 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)));
+      (async () => {
+        const cachedIndex = await caches.match('/index.html');
+        if (self.navigator.onLine === false && cachedIndex) return cachedIndex;
+
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            const copy = response.clone();
+            event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy)));
+          }
+          return response;
+        } catch (error) {
+          if (cachedIndex) return cachedIndex;
+          const cachedRoot = await caches.match('/');
+          if (cachedRoot) return cachedRoot;
+          throw error;
         }
-        return response;
-      }).catch(async () => {
-        const cached = await caches.match('/index.html');
-        if (cached) return cached;
-        return caches.match('/');
-      }),
+      })(),
     );
     return;
   }

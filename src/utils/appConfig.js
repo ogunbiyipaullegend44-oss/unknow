@@ -25,6 +25,8 @@ function readLocalStorage() {
 }
 
 export async function readConfigFile() {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return null;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {

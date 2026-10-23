@@ -11,7 +11,6 @@ const STARTUP_SPLASH_DURATION_MS = 4000;
 export default function App() {
   const { project } = useProject();
   const { loaded, mapProviderSource } = useAppConfig();
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [showStartupSplash, setShowStartupSplash] = useState(true);
   const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
   const isWaitingForConfig = !isResetPasswordRoute && !loaded;
@@ -26,16 +25,6 @@ export default function App() {
     );
     return () => window.clearTimeout(timer);
   }, [isResetPasswordRoute]);
-
-  useEffect(() => {
-    const updateConnection = () => setIsOnline(navigator.onLine);
-    window.addEventListener('online', updateConnection);
-    window.addEventListener('offline', updateConnection);
-    return () => {
-      window.removeEventListener('online', updateConnection);
-      window.removeEventListener('offline', updateConnection);
-    };
-  }, []);
 
   let screen;
   if (isResetPasswordRoute) {
@@ -58,11 +47,6 @@ export default function App() {
 
   return (
     <>
-      {!shouldShowStartupSplash && !isWaitingForConfig && !isOnline && (
-        <div className="offline-notice" role="status">
-          You’re offline. Saved work stays available; live research, maps, and account features need internet.
-        </div>
-      )}
       {!shouldShowStartupSplash && !isWaitingForConfig && <InstallPrompt />}
       {screen}
     </>
