@@ -23,8 +23,8 @@ body,
   display: block;
   width: clamp(88px, 24vw, 120px);
   aspect-ratio: 1;
-  border: 4px solid #fff;
-  border-radius: 22%;
+  border-radius: 26%;
+  background: #fff;
   object-fit: contain;
 }
 
