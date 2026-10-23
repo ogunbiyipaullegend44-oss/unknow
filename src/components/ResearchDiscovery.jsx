@@ -1556,7 +1556,7 @@ export default function ResearchDiscovery({
               }}
               rows={1}
               required
-              aria-describedby={research ? 'question-help research-enter-help' : 'research-enter-help'}
+              aria-describedby={research ? 'question-help' : undefined}
             />
             <button
               className="btn btn-primary research-submit research-submit-icon"
@@ -1570,7 +1570,6 @@ export default function ResearchDiscovery({
           </div>
           <div className="research-input-meta">
             {research && <span id="question-help">Update this question and its search settings.</span>}
-            <span id="research-enter-help">Desktop: press Enter to start research; Shift+Enter adds a new line.</span>
             {question.length > 0 && (
               <span id="question-count">{question.length.toLocaleString()} characters</span>
             )}
