@@ -485,7 +485,7 @@
   width: 68px;
   height: 68px;
   flex: 0 0 68px;
-  border: 2px solid var(--border-strong);
+  border: 2px solid #fff;
   border-radius: 16px;
   object-fit: cover;
   background: #fff;
@@ -1536,13 +1536,30 @@
   }
 
   .research-form-stage-home {
+    position: relative;
     flex: 1 0 auto;
     justify-content: flex-end;
   }
 
   .research-home-brand {
     gap: 12px;
-    margin-bottom: 24px;
+    position: fixed;
+    top: 50dvh;
+    right: 0;
+    left: 0;
+    margin: 0;
+    transform: translateY(-50%);
+    transition: top 180ms ease, transform 180ms ease, margin 180ms ease;
+  }
+
+  .research-form-stage-filter-open .research-home-brand {
+    position: relative;
+    top: auto;
+    right: auto;
+    left: auto;
+    flex: 0 0 auto;
+    margin: 0 auto 16px;
+    transform: none;
   }
 
   .research-home-brand img {

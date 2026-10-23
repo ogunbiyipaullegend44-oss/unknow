@@ -23,7 +23,7 @@ body,
   display: block;
   width: clamp(96px, 24vw, 180px);
   aspect-ratio: 1;
-  border: 2px solid var(--border-strong);
+  border: 2px solid #fff;
   border-radius: 22%;
   object-fit: contain;
 }
