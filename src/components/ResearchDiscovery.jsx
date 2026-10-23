@@ -15,6 +15,7 @@ import {
 import { addResearchHistoryEntry, compactResearchForHistory } from './researchHistory.js';
 import { getTimeGreeting } from './landingGreeting.js';
 import { shouldSubmitResearchOnEnter } from '../utils/researchKeyboard.js';
+import { hasMoreResearchSources, mergeResearchSources } from './researchSourcePagination.js';
 import AccountCenter from './AccountCenter.jsx';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
 import { neon } from '../community/neonClient.js';
@@ -232,6 +233,7 @@ export default function ResearchDiscovery({
   const [projectNameDraft, setProjectNameDraft] = useState('');
   const [projectActionError, setProjectActionError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMoreSources, setLoadingMoreSources] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [researchOptionsOpen, setResearchOptionsOpen] = useState(false);
@@ -929,6 +931,72 @@ export default function ResearchDiscovery({
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreSources = async () => {
+    if (!research || loadingMoreSources || !hasMoreResearchSources(research.sourceCursors)) return;
+
+    setLoadingMoreSources(true);
+    setError('');
+    setNotice('');
+    try {
+      const scope = research.scope ?? {};
+      const response = await fetch('/api/research/continue', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          question: research.question,
+          purposes: research.analysis?.purposes ?? ['general'],
+          region: scope.region ?? '',
+          sourceLimit: 'all',
+          year: scope.year ?? null,
+          fromYear: scope.fromYear ?? null,
+          toYear: scope.toYear ?? null,
+          month: scope.month ?? '',
+          sourceCursors: research.sourceCursors,
+        }),
+      });
+      let result;
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          response.ok
+            ? 'The source catalog returned an unreadable response. Please retry.'
+            : 'The source catalog returned an unreadable error. Please retry.',
+        );
+      }
+      if (!response.ok) {
+        throw new Error(result.error || 'The next source page could not be loaded.');
+      }
+      if (!Array.isArray(result.sources) || !result.sourceCursors) {
+        throw new Error('The source catalog returned an incomplete page. Please retry.');
+      }
+
+      const updatedResearch = {
+        ...research,
+        sources: mergeResearchSources(research.sources, result.sources),
+        sourceCursors: result.sourceCursors,
+      };
+      setResearch(updatedResearch);
+      const addedCount = updatedResearch.sources.length - research.sources.length;
+      const remaining = hasMoreResearchSources(result.sourceCursors);
+      const pageNotice = addedCount
+        ? `Loaded ${addedCount} more scholarly source${addedCount === 1 ? '' : 's'} (${updatedResearch.sources.length} total).`
+        : 'No new scholarly sources were found on this page.';
+      const warningNotice = result.warnings?.length
+        ? ` Catalog notice: ${result.warnings.join(' ')}`
+        : '';
+      setNotice(`${pageNotice}${remaining ? ' Load more to continue through the available catalogs.' : ' All available scholarly catalog pages have been retrieved.'}${warningNotice}`);
+    } catch (requestError) {
+      setError(
+        requestError instanceof TypeError
+          ? 'The source catalog could not be reached. Check your connection and retry.'
+          : requestError.message,
+      );
+    } finally {
+      setLoadingMoreSources(false);
     }
   };
 
@@ -1812,7 +1880,9 @@ export default function ResearchDiscovery({
                     <span>{research.scope?.region || 'Worldwide'}</span>
                     <span>
                       {research.scope?.sourceLimit === 'all'
-                        ? 'All matching records requested'
+                        ? hasMoreResearchSources(research.sourceCursors)
+                          ? 'No source limit · more catalog pages available'
+                          : 'No source limit · all available pages retrieved'
                         : `Up to ${research.scope?.sourceLimit ?? research.sources.length} sources requested`}
                     </span>
                   </p>
@@ -1907,6 +1977,16 @@ export default function ResearchDiscovery({
                 {visibleSources.length > resultPageLimit && (
                   <button className="btn btn-secondary result-load-more" type="button" onClick={() => setResultPageLimit((current) => current + RESULTS_PER_PAGE)}>
                     Show next {Math.min(RESULTS_PER_PAGE, visibleSources.length - resultPageLimit)} sources
+                  </button>
+                )}
+                {research.scope?.sourceLimit === 'all' && hasMoreResearchSources(research.sourceCursors) && (
+                  <button
+                    className="btn btn-secondary result-load-more"
+                    type="button"
+                    onClick={loadMoreSources}
+                    disabled={loadingMoreSources}
+                  >
+                    {loadingMoreSources ? 'Loading more sources…' : 'Load more scholarly sources'}
                   </button>
                 )}
               </div>
