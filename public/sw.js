@@ -1,10 +1,10 @@
-const CACHE_NAME = 'attis-app-shell-v3';
+const CACHE_NAME = 'attis-app-shell-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
   '/brinfolynk-mark.png',
-  '/brinfolynk-180.png',
+  '/brinfolynk-180-v2.png',
   '/brinfolynk-192.png',
   '/brinfolynk-512.png',
   '/brinfolynk-splash.png',
