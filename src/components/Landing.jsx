@@ -42,7 +42,7 @@ function LandingScreen() {
       <div className="landing-content landing-content-splash">
         <div className="landing-brand landing-brand-splash">
           <div className="landing-brand-lockup">
-            <img className="landing-logo" src="/brinfolynk-mark.png" alt="Brinfolynk" />
+            <img className="landing-logo" src="/brinfolynk-splash.png" alt="Brinfolynk" />
           </div>
         </div>
       </div>

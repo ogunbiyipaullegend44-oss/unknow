@@ -71,8 +71,6 @@
   flex: 0 0 76px;
   border-radius: 18px;
   object-fit: contain;
-  background: #fff;
-  box-shadow: var(--shadow-lg);
 }
 
 .landing-tools {
