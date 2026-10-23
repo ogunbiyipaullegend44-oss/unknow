@@ -485,6 +485,7 @@
   width: 68px;
   height: 68px;
   flex: 0 0 68px;
+  border: 2px solid var(--border-strong);
   border-radius: 16px;
   object-fit: cover;
   background: #fff;
@@ -1548,6 +1549,7 @@
     width: 56px;
     height: 56px;
     flex-basis: 56px;
+    border-width: 2px;
     border-radius: 14px;
   }
 

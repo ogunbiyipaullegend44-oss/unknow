@@ -2,7 +2,7 @@
   position: fixed;
   z-index: 1900;
   right: max(12px, env(safe-area-inset-right));
-  bottom: max(72px, calc(env(safe-area-inset-bottom) + 60px));
+  bottom: max(12px, env(safe-area-inset-bottom));
   padding: 9px 18px;
   box-shadow: var(--shadow-lg);
 }
