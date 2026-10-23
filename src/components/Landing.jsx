@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import ClearAllDataButton from './ClearAllDataButton.jsx';
 import './Landing.css';
 
@@ -6,22 +6,10 @@ const ResearchDiscovery = lazy(() => import('./ResearchDiscovery.jsx'));
 
 export default function Landing() {
   const [showResearch, setShowResearch] = useState(false);
-  const [hasOpenedResearch, setHasOpenedResearch] = useState(false);
+  const [hasOpenedResearch, setHasOpenedResearch] = useState(true);
   const [researchEntry, setResearchEntry] = useState({ page: 'research', id: 0 });
-  const hasHandledInitialEntry = useRef(false);
-  useEffect(() => {
-    if (showResearch || hasHandledInitialEntry.current) return undefined;
-    const timer = window.setTimeout(() => {
-      hasHandledInitialEntry.current = true;
-      setResearchEntry((entry) => ({ page: 'research', id: entry.id + 1 }));
-      setHasOpenedResearch(true);
-      setShowResearch(true);
-    }, 2500);
-    return () => window.clearTimeout(timer);
-  }, [showResearch]);
 
   const openResearch = (page = 'research') => {
-    hasHandledInitialEntry.current = true;
     setResearchEntry((entry) => ({ page, id: entry.id + 1 }));
     setHasOpenedResearch(true);
     setShowResearch(true);
