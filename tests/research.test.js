@@ -234,6 +234,39 @@ test('AI topic overview rejects an empty source list without calling Anthropic',
   assert.equal(providerCalls, 0);
 });
 
+test('AI topic overview includes a bounded provider error message for diagnosis', async (t) => {
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async () => Response.json({
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message: 'The requested test model is not available.',
+      },
+    }, { status: 400 }),
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/topic-overview`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'Update on Nigeria election',
+      sources: [{
+        id: 'source-1',
+        title: 'Election schedule',
+        date: '2026-10-21',
+        text: 'The election schedule was announced.',
+      }],
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 502);
+  assert.match(body.error, /requested test model is not available/);
+});
+
 test('current-affairs search intent expands update queries into timely, topic-specific news searches', () => {
   const query = buildCurrentAffairsSearchQuery('update on Nigeria election');
   const climateQuery = buildCurrentAffairsSearchQuery('latest updates on climate policy in India');

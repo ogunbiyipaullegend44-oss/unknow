@@ -1,3 +1,5 @@
+import { anthropicErrorMessage } from './anthropicResponse.js';
+
 const MAX_QUESTION_LENGTH = 1000;
 const MAX_SOURCE_COUNT = 8;
 const MAX_SOURCE_TEXT_LENGTH = 3000;
@@ -95,11 +97,12 @@ export async function generateAiTopicOverview({
   }
 
   if (!response.ok) {
+    const providerMessage = await anthropicErrorMessage(response);
     const error = new Error(response.status === 401 || response.status === 403
       ? 'Anthropic rejected the server API key. Check ANTHROPIC_API_KEY in the server or Vercel environment.'
       : response.status === 429
         ? 'Anthropic rate-limited the request. Wait a moment and try again.'
-        : `Anthropic could not generate the topic overview (HTTP ${response.status}).`);
+        : `Anthropic could not generate the topic overview (HTTP ${response.status}).${providerMessage ? ` ${providerMessage}` : ''}`);
     error.status = response.status === 429 ? 429 : 502;
     throw error;
   }
