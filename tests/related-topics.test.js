@@ -1,58 +1,99 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRelatedTopics } from '../src/components/relatedTopics.js';
+import { createServer } from '../server/index.js';
+import {
+  generateAiRelatedTopics,
+  validateAiRelatedTopicsRequest,
+} from '../server/aiRelatedTopics.js';
 
-test('related topics use the current research subject and include actionable questions and categories', () => {
-  const topics = getRelatedTopics({
-    question: 'How does access to quality education affect employment in Nigeria?',
-    analysis: {
-      mainSubject: 'access to quality education affect employment in Nigeria',
+const topics = [
+  { title: 'Urban planning choices', question: 'How do zoning choices influence exposure to urban air pollution?' },
+  { title: 'School exposure patterns', question: 'How does air pollution exposure differ for children attending urban schools?' },
+  { title: 'Indoor air quality', question: 'How does outdoor pollution affect indoor air quality in dense neighborhoods?' },
+  { title: 'Public transit emissions', question: 'What role do public transit systems play in neighborhood air pollution exposure?' },
+];
+
+test('related-topic request validates question and optional research context', () => {
+  assert.equal(validateAiRelatedTopicsRequest({
+    question: 'How does air pollution affect urban health?',
+    region: 'Nairobi',
+    areas: [{ title: 'Exposure', description: 'Population exposure patterns' }],
+  }), null);
+  assert.match(validateAiRelatedTopicsRequest({ question: 'short' }), /between 8 and 1,000/);
+  assert.match(validateAiRelatedTopicsRequest({
+    question: 'How does air pollution affect urban health?',
+    areas: Array.from({ length: 9 }, (_, index) => ({ title: `Area ${index}` })),
+  }), /research area/i);
+});
+
+test('AI generates question-specific related topics and preserves the returned topic groups', async () => {
+  let providerRequest;
+  const server = createServer({
+    anthropicApiKey: 'test-anthropic-key',
+    fetchImpl: async (url, options) => {
+      providerRequest = { url, body: JSON.parse(options.body) };
+      return Response.json({
+        content: [{ type: 'text', text: JSON.stringify({ topics }) }],
+      });
     },
-    scope: { region: 'Nigeria' },
   });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/related-topics`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        question: 'How does air pollution affect urban health?',
+        region: 'Nairobi',
+        areas: [{ title: 'Exposure', description: 'Population exposure patterns' }],
+      }),
+    });
+    const result = await response.json();
 
-  assert.ok(topics.length >= 8);
-  assert.ok(topics.some((topic) => topic.id === 'education-funding'));
-  assert.ok(topics.some((topic) => topic.id === 'education-employment'));
-  for (const topic of topics) {
-    assert.ok(topic.question.includes('Nigeria'));
-    assert.ok(topic.why.length > 0);
-    assert.ok(topic.relationship.length > 0);
-    assert.ok(topic.evidence.length > 0);
-    assert.ok(topic.categories.length > 0);
+    assert.equal(response.status, 200);
+    assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
+    assert.match(providerRequest.body.system, /spontaneous/i);
+    assert.match(providerRequest.body.system, /Do not use a fixed template/i);
+    assert.match(providerRequest.body.messages[0].content, /Nairobi/);
+    assert.deepEqual(result.topics, topics);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 
-test('related topics stay specific to a non-education research question', () => {
-  const topics = getRelatedTopics({
-    question: 'How does urban air pollution affect asthma rates in Nairobi?',
-    analysis: { mainSubject: 'urban air pollution affect asthma rates in Nairobi' },
-    scope: { region: 'Nairobi' },
-  });
-
-  assert.ok(topics.some((topic) => topic.id === 'health-risk'));
-  assert.ok(topics.every((topic) => !topic.title.toLowerCase().includes('education')));
-  assert.ok(topics.some((topic) => topic.question.includes('urban air pollution')));
+test('related-topic generation rejects duplicate or invalid model topics', async () => {
+  await assert.rejects(
+    generateAiRelatedTopics({
+      question: 'How does air pollution affect urban health?',
+      apiKey: 'test-anthropic-key',
+      fetchImpl: async () => Response.json({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            topics: [
+              ...topics.slice(0, 3),
+              { ...topics[0], question: 'How do urban zoning choices change neighborhood air quality?' },
+            ],
+          }),
+        }],
+      }),
+    }),
+    /duplicate related topics/,
+  );
 });
 
-test('related-topic source suggestions adapt to the question domain and topic angle', () => {
-  const environment = getRelatedTopics({
-    question: 'How does urban air pollution affect asthma rates?',
-    analysis: { mainSubject: 'urban air pollution and asthma rates' },
-  });
-  const technology = getRelatedTopics({
-    question: 'How does artificial intelligence affect hiring decisions?',
-    analysis: { mainSubject: 'artificial intelligence and hiring decisions' },
-  });
-
-  assert.ok(environment.some((topic) => topic.categories.includes('Government and Official Sources')));
-  assert.ok(technology.some((topic) => topic.categories.includes('News and Journalism')));
-  assert.ok(environment.find((topic) => topic.id === 'experience').categories.includes('News and Journalism'));
-  assert.ok(technology.find((topic) => topic.id === 'evidence-quality').categories.includes('Books and Other Publications'));
-  assert.notDeepEqual(environment[0].categories, technology[0].categories);
-});
-
-test('related topics are empty when research context is unavailable', () => {
-  assert.deepEqual(getRelatedTopics(null), []);
-  assert.deepEqual(getRelatedTopics({ question: 'A research topic' }), []);
+test('related-topic endpoint reports when AI generation is not configured', async () => {
+  const server = createServer({ anthropicApiKey: '' });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/related-topics`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question: 'How does air pollution affect urban health?' }),
+    });
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /AI related topics are not configured/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });

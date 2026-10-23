@@ -1,86 +1,182 @@
-import { useState } from 'react';
-import { getRelatedTopics } from './relatedTopics.js';
+import { useEffect, useState } from 'react';
+import { sourceDateLabel } from './sourceCategories.js';
+import { groupRelatedSources, normalizeRelatedSources, relatedSourceLimit } from './relatedTopicSources.js';
 import './RelatedTopics.css';
 
-function sourcesFromResult(result) {
-  return [
-    ...(result.sources ?? []).map((source) => ({
-      id: `academic:${source.id}`,
-      kind: 'Academic source',
-      title: source.title,
-      url: source.url,
-      description: source.abstract || '',
-      provider: source.metadataSource || source.provider || 'Academic catalog',
-      authors: source.authors ?? [],
-      publicationYear: source.publicationYear,
-      journal: source.journal || source.publisher,
-      citationCount: source.citationCount,
-    })),
-    ...(result.webSources ?? []).map((source) => ({
-      id: `web:${source.id}`,
-      kind: 'Web source',
-      title: source.title,
-      url: source.url,
-      description: source.description || '',
-      provider: source.provider || 'Web search',
-    })),
-    ...(result.videos ?? []).map((video) => ({
-      id: `video:${video.id}`,
-      kind: 'Video',
-      title: video.title,
-      url: video.url,
-      description: video.description || '',
-      provider: video.platform || 'Video platform',
-    })),
-  ].filter((source) => source.title && source.url);
+const topicRequestCache = new Map();
+const sourceRequestCache = new Map();
+const MAX_CACHED_REQUESTS = 40;
+
+async function readResponse(response, fallbackMessage) {
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('The server returned an unreadable response. Please try again.');
+  }
+  if (!response.ok) throw new Error(result.error || fallbackMessage);
+  return result;
+}
+
+async function findSourcesForTopic(research, topic) {
+  const scope = research.scope ?? {};
+  const response = await fetch('/api/research', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: topic.question,
+      purposes: research.analysis?.purposes?.length ? research.analysis.purposes : ['general'],
+      region: scope.region ?? '',
+      sourceLimit: relatedSourceLimit(scope.sourceLimit),
+      year: scope.year ?? null,
+      month: scope.month ?? '',
+      fromYear: scope.fromYear ?? null,
+      toYear: scope.toYear ?? null,
+    }),
+  });
+  const result = await readResponse(response, 'Source search could not be completed.');
+  return {
+    sources: normalizeRelatedSources(result),
+    videoWarnings: result.videoWarnings ?? [],
+  };
+}
+
+function rememberRequest(cache, key, createRequest) {
+  if (cache.has(key)) return cache.get(key);
+  if (cache.size >= MAX_CACHED_REQUESTS) {
+    cache.delete(cache.keys().next().value);
+  }
+  const request = createRequest().catch((error) => {
+    cache.delete(key);
+    throw error;
+  });
+  cache.set(key, request);
+  return request;
+}
+
+function researchCacheKey(research) {
+  return JSON.stringify({
+    id: research.id ?? research.question,
+    retrievedAt: research.retrievedAt ?? '',
+    scope: research.scope ?? {},
+  });
+}
+
+function loadRelatedTopics(research, force = false) {
+  const key = researchCacheKey(research);
+  if (force) topicRequestCache.delete(key);
+  return rememberRequest(topicRequestCache, key, async () => {
+    const response = await fetch('/api/research/related-topics', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        question: research.question,
+        region: research.scope?.region ?? '',
+        areas: (research.analysis?.researchAreas ?? []).slice(0, 8).map(({ title, description }) => ({
+          title,
+          description: description ?? '',
+        })),
+      }),
+    });
+    const result = await readResponse(response, 'AI related topics could not be generated.');
+    if (!Array.isArray(result.topics) || result.topics.length === 0) {
+      throw new Error('The AI service did not return any related topics. Please try again.');
+    }
+    return result.topics;
+  });
+}
+
+function loadTopicSources(research, topic, force = false) {
+  const key = `${researchCacheKey(research)}:${topic.question}`;
+  if (force) sourceRequestCache.delete(key);
+  return rememberRequest(sourceRequestCache, key, () => findSourcesForTopic(research, topic));
+}
+
+function SourceResult({ source }) {
+  return (
+    <article className="source-card discovery-card">
+      <div className="source-card-topline">
+        <span className="source-type">{source.category}</span>
+        <span>{sourceDateLabel(source.date)}</span>
+      </div>
+      <h3><a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a></h3>
+      <p className="source-publisher">
+        {[source.author, source.publisher, source.provider].filter(Boolean).join(' · ') || 'Source details not available'}
+      </p>
+      {source.description && (
+        <details className="source-abstract">
+          <summary>Abstract</summary>
+          <p>{source.description}</p>
+        </details>
+      )}
+      <div className="source-card-footer">
+        <a href={source.url} target="_blank" rel="noopener noreferrer">Open original source</a>
+      </div>
+    </article>
+  );
 }
 
 export default function RelatedTopics({ research }) {
-  const topics = getRelatedTopics(research);
+  const [generation, setGeneration] = useState({ loading: true, topics: [], error: '' });
   const [searches, setSearches] = useState({});
+  const [retryGeneration, setRetryGeneration] = useState(0);
+  const selectedSourceLimit = relatedSourceLimit(research.scope?.sourceLimit);
 
-  const findSources = async (topic) => {
+  useEffect(() => {
+    let active = true;
+    setGeneration({ loading: true, topics: [], error: '' });
+    setSearches({});
+
+    if (!research?.question) {
+      setGeneration({ loading: false, topics: [], error: 'Research question is unavailable.' });
+      return () => { active = false; };
+    }
+
+    loadRelatedTopics(research, retryGeneration > 0).then((topics) => {
+      if (!active) return;
+      setGeneration({ loading: false, topics, error: '' });
+      setSearches(Object.fromEntries(topics.map((topic) => [
+        topic.title,
+        { loading: true, sources: [], videoWarnings: [], error: '' },
+      ])));
+      return Promise.all(topics.map(async (topic) => {
+        try {
+          const result = await loadTopicSources(research, topic, retryGeneration > 0);
+          if (!active) return;
+          setSearches((current) => ({
+            ...current,
+            [topic.title]: { loading: false, ...result, error: '' },
+          }));
+        } catch (error) {
+          if (!active) return;
+          setSearches((current) => ({
+            ...current,
+            [topic.title]: { loading: false, sources: [], videoWarnings: [], error: error.message },
+          }));
+        }
+      }));
+    }).catch((error) => {
+      if (active) setGeneration({ loading: false, topics: [], error: error.message });
+    });
+
+    return () => { active = false; };
+  }, [research, retryGeneration]);
+
+  const retrySources = async (topic) => {
     setSearches((current) => ({
       ...current,
-      [topic.id]: { loading: true, sources: [], error: '' },
+      [topic.title]: { loading: true, sources: current[topic.title]?.sources ?? [], error: '' },
     }));
     try {
-      const scope = research.scope ?? {};
-      const response = await fetch('/api/research', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          question: topic.question,
-          purposes: research.analysis?.purposes?.length ? research.analysis.purposes : ['general'],
-          region: scope.region ?? '',
-          sourceLimit: 100,
-          year: scope.year ?? null,
-          month: scope.month ?? '',
-          fromYear: scope.fromYear ?? null,
-          toYear: scope.toYear ?? null,
-        }),
-      });
-      let result;
-      try {
-        result = await response.json();
-      } catch {
-        throw new Error('The source search returned an unreadable response.');
-      }
-      if (!response.ok) {
-        throw new Error(result.error || `The source search failed (${response.status}).`);
-      }
+      const result = await loadTopicSources(research, topic, true);
       setSearches((current) => ({
         ...current,
-        [topic.id]: {
-          loading: false,
-          sources: sourcesFromResult(result),
-          error: '',
-        },
+        [topic.title]: { loading: false, ...result, error: '' },
       }));
     } catch (error) {
       setSearches((current) => ({
         ...current,
-        [topic.id]: { loading: false, sources: [], error: error.message },
+        [topic.title]: { loading: false, sources: [], videoWarnings: [], error: error.message },
       }));
     }
   };
@@ -88,87 +184,78 @@ export default function RelatedTopics({ research }) {
   return (
     <section className="related-topics" aria-labelledby="related-topics-heading">
       <div className="related-topics-heading">
-        <div>
-          <h3 id="related-topics-heading">Related topics and sources</h3>
-          <p>Explore research directions connected to the main question. Each angle searches for additional sources independently; results here stay separate from the main source list and Claims &amp; evidence register.</p>
-        </div>
+        <h3 id="related-topics-heading">Related Topic</h3>
+        <p>
+          AI-generated research directions and independently retrieved sources, grouped by topic.
+          {' '}{selectedSourceLimit === 'all'
+            ? 'Showing all sources returned by available providers.'
+            : `Showing up to ${selectedSourceLimit} sources in each category.`}
+        </p>
       </div>
 
+      {generation.loading && <p className="related-topics-status" role="status">Generating related topics…</p>}
+      {generation.error && (
+        <div className="related-topics-error" role="alert">
+          <p>{generation.error}</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setRetryGeneration((value) => value + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+
       <div className="related-topic-list">
-        {topics.map((topic) => {
-          const search = searches[topic.id];
+        {generation.topics.map((topic) => {
+          const search = searches[topic.title];
+          const groups = groupRelatedSources(search?.sources ?? [], selectedSourceLimit);
           return (
-            <article className="related-topic-card" key={topic.id}>
-              <h4>{topic.title}</h4>
-              <div className="related-topic-question">
-                <span>Suggested research question</span>
-                <strong>{topic.question}</strong>
+            <section className="related-topic-group" key={topic.title} aria-labelledby={`related-topic-${topic.title.replaceAll(/[^a-z0-9]+/gi, '-')}`}>
+              <div className="related-topic-group-heading">
+                <h4 id={`related-topic-${topic.title.replaceAll(/[^a-z0-9]+/gi, '-')}`}>{topic.title}</h4>
+                <p>{topic.question}</p>
               </div>
-              <dl className="related-topic-details">
-                <div>
-                  <dt>Why it matters</dt>
-                  <dd>{topic.why}</dd>
-                </div>
-                <div>
-                  <dt>Connection to your research</dt>
-                  <dd>{topic.relationship}</dd>
-                </div>
-                <div>
-                  <dt>Evidence to look for</dt>
-                  <dd>{topic.evidence}</dd>
-                </div>
-              </dl>
-              <button
-                className="btn btn-secondary related-topic-search"
-                type="button"
-                onClick={() => findSources(topic)}
-                disabled={search?.loading}
-              >
-                {search?.loading ? 'Searching sources…' : search ? 'Search this angle again' : 'Find related sources'}
-              </button>
-              {search?.error && <p className="related-topic-error" role="alert">{search.error}</p>}
-              {search && !search.loading && !search.error && (
-                <div className="related-topic-results" aria-live="polite">
-                  <h5>{search.sources.length} related source{search.sources.length === 1 ? '' : 's'}</h5>
-                  {search.sources.length ? (
-                    <ul>
-                      {search.sources.map((source) => (
-                        <li key={source.id}>
-                          <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>
-                          <span>
-                            {[
-                              source.kind,
-                              source.provider,
-                              source.authors?.length
-                                ? `${source.authors.slice(0, 3).join(', ')}${source.authors.length > 3 ? ' et al.' : ''}`
-                                : '',
-                              source.journal,
-                              source.publicationYear,
-                              Number.isInteger(source.citationCount)
-                                ? `${source.citationCount.toLocaleString()} citations`
-                                : '',
-                            ].filter(Boolean).join(' · ')}
-                          </span>
-                          {source.description && <p>{source.description}</p>}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>No sources were returned for this angle. Try searching again later.</p>
-                  )}
+
+              {search?.loading && <p className="related-topics-status" role="status">Finding sources for this topic…</p>}
+              {search?.error && (
+                <div className="related-topics-error" role="alert">
+                  <p>{search.error}</p>
+                  <button className="btn btn-secondary" type="button" onClick={() => retrySources(topic)}>Retry source search</button>
                 </div>
               )}
-              <div className="related-topic-categories">
-                <span>Suggested source areas</span>
-                <p>{topic.categories.join(' · ')}</p>
-              </div>
-            </article>
+              {search?.videoWarnings?.length > 0 && (
+                <p className="related-topic-video-warning" role="status">
+                  Video search notice: {search.videoWarnings.join(' ')}
+                </p>
+              )}
+              {search && !search.loading && !search.error && (
+                groups.length ? (
+                  <div className="related-topic-categories">
+                    {groups.map(([category, sources]) => (
+                      <section className="related-topic-category" key={category} aria-label={`${category} for ${topic.title}`}>
+                        <div className="discovery-category-heading">
+                          <h5>{category}</h5>
+                          <span>{sources.length}</span>
+                        </div>
+                        <div className="source-list">
+                          {sources.length ? sources.map((source) => <SourceResult key={source.id} source={source} />) : (
+                            <p className="related-topics-empty">No video sources were returned for this topic.</p>
+                          )}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="related-topics-empty">No sources were returned for this topic.</p>
+                )
+              )}
+            </section>
           );
         })}
       </div>
-      <p className="related-topics-note">
-        These are research directions, not findings. Each search retrieves sources from available providers and does not establish that a source supports the topic.
-      </p>
+      {generation.topics.length > 0 && (
+        <p className="related-topics-note">
+          Topic angles are AI-generated research directions, not findings. Retrieved source records are presented as returned and have not been independently verified.
+        </p>
+      )}
     </section>
   );
 }

@@ -30,6 +30,17 @@ export function buildCurrentAffairsSearchQuery(question, region = '') {
   return `${base} ${context}`.trim();
 }
 
+export function buildCurrentAffairsVideoQuery(question, region = '') {
+  const topic = String(question ?? '')
+    .replace(CURRENT_INTENT_WORDS, ' ')
+    .replace(/\b(?:an?|the|on|about|for|of|in|to|give|me|please)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const base = buildResearchSearchQuery(topic || question, region);
+  const timing = /\bupcoming\b/i.test(question) ? 'upcoming' : 'latest';
+  return `${base} ${timing} news`.trim();
+}
+
 export function currentAffairsTimeRange(question) {
   return /\bupcoming\b/i.test(question) ? 'year' : 'month';
 }

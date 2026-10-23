@@ -7,7 +7,7 @@ import RelatedTopics from './RelatedTopics.jsx';
 import TrendingDiscover from './TrendingDiscover.jsx';
 import OrganizationWorkspace from './OrganizationWorkspace.jsx';
 import CommunityResearchHub from './CommunityResearchHub.jsx';
-import { matchesQuestionRelevance } from './sourceFilterUtils.js';
+import { matchesQuestionRelevance, matchesVideoQuestion } from './sourceFilterUtils.js';
 import { addResearchHistoryEntry, compactResearchForHistory } from './researchHistory.js';
 import { getTimeGreeting } from './landingGreeting.js';
 import AccountCenter from './AccountCenter.jsx';
@@ -209,6 +209,7 @@ export default function ResearchDiscovery({
   const [month, setMonth] = useState('');
   const [purposes, setPurposes] = useState(['general']);
   const [research, setResearch] = useState(null);
+  const [videoRefreshState, setVideoRefreshState] = useState(null);
   const [isEditingResearchQuestion, setIsEditingResearchQuestion] = useState(false);
   const [editedResearchQuestion, setEditedResearchQuestion] = useState('');
   const [researchPages, setResearchPages] = useState([]);
@@ -250,6 +251,115 @@ export default function ResearchDiscovery({
   const questionInputRef = useRef(null);
   const researchOptionsRef = useRef(null);
   const outsideResearchOptionsClicksRef = useRef(0);
+  const videoRefreshAttemptRef = useRef('');
+
+  useEffect(() => {
+    const hasStaleKeyWarning = (research?.videoWarnings ?? [])
+      .some((warning) => /YouTube: add YOUTUBE_API_KEY/i.test(warning));
+    if (!research || view !== 'videos' || !hasStaleKeyWarning) return;
+
+    const attemptKey = `${research.id}:${research.retrievedAt}`;
+    if (videoRefreshAttemptRef.current === attemptKey) return;
+    videoRefreshAttemptRef.current = attemptKey;
+    setVideoRefreshState({ researchId: research.id, status: 'checking' });
+
+    const updateStoredResearch = (updated) => {
+      setResearch((current) => current?.id === updated.id ? updated : current);
+      setResearchPages((current) => current.map((page) =>
+        page.id === updated.id ? updated : page,
+      ));
+      setHistory((current) => {
+        try {
+          const saved = compactResearchForHistory(updated, updated.id);
+          const nextHistory = addResearchHistoryEntry(current, saved, {
+            replaceMatchingQuestion: true,
+          });
+          window.localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory));
+          return nextHistory;
+        } catch (error) {
+          setHistoryNotice(`Refreshed videos are available in this session, but browser history could not be updated: ${error.message}`);
+          return current;
+        }
+      });
+    };
+
+    const refreshVideos = async () => {
+      try {
+        const healthResponse = await fetch('/api/health');
+        let health;
+        try {
+          health = await healthResponse.json();
+        } catch {
+          throw new Error('The deployment health check returned an unreadable response.');
+        }
+        if (!healthResponse.ok) {
+          throw new Error(health.error || `The deployment health check failed (${healthResponse.status}).`);
+        }
+        if (!health.videoProviders?.youtube) {
+          setVideoRefreshState({
+            researchId: research.id,
+            status: 'unconfigured',
+            message: 'This deployment cannot see YOUTUBE_API_KEY. Confirm the key is enabled for the Production environment in Vercel, then redeploy.',
+          });
+          return;
+        }
+
+        setVideoRefreshState({
+          researchId: research.id,
+          status: 'refreshing',
+        });
+        const scope = research.scope ?? {};
+        const response = await fetch('/api/research/videos', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            question: research.question,
+            region: scope.region ?? '',
+            year: scope.year ?? null,
+            month: scope.month ?? '',
+            fromYear: scope.fromYear ?? null,
+            toYear: scope.toYear ?? null,
+          }),
+        });
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          throw new Error(response.status === 404
+            ? 'Video refresh is not available in this deployment yet. Redeploy the latest application, then reopen Videos.'
+            : 'The video refresh returned an unreadable response.');
+        }
+        if (!response.ok) {
+          throw new Error(result.error || `Video refresh failed (${response.status}).`);
+        }
+        if (!Array.isArray(result.videos) || !Array.isArray(result.videoWarnings)) {
+          throw new Error('The video refresh returned an incomplete result.');
+        }
+
+        const updated = {
+          ...research,
+          videos: result.videos,
+          videoProviders: result.videoProviders ?? [],
+          videoWarnings: result.videoWarnings,
+          retrievedAt: new Date().toISOString(),
+        };
+        updateStoredResearch(updated);
+        setVideoRefreshState({
+          researchId: research.id,
+          status: 'refreshed',
+          message: `Video results refreshed with the configured providers. ${result.videos.length} video${result.videos.length === 1 ? '' : 's'} found.`,
+        });
+      } catch (refreshError) {
+        setVideoRefreshState({
+          researchId: research.id,
+          status: 'error',
+          message: refreshError.message || 'Video results could not be refreshed.',
+        });
+      }
+    };
+
+    refreshVideos();
+  }, [research, view]);
 
   const setActivePage = (page) => {
     if (page === activePageRef.current) return;
@@ -517,10 +627,7 @@ export default function ResearchDiscovery({
     if (!research || view !== 'videos') return [];
     const terms = deferredQuery.trim().toLocaleLowerCase();
     return (research.videos ?? [])
-      .filter((video) => matchesQuestionRelevance(
-        video.description ?? '',
-        research.question,
-      ))
+      .filter((video) => matchesVideoQuestion(video, research.question))
       .filter((video) => matchesVideoDate(video, dateRange))
       .filter((video) => !terms || `${video.title} ${video.description} ${video.channel} ${video.platform}`
         .toLocaleLowerCase()
@@ -1573,10 +1680,11 @@ export default function ResearchDiscovery({
               </button>
               <button
                 type="button"
+                className="research-related-topics-tab"
                 aria-current={view === 'related-topics' ? 'page' : undefined}
                 onClick={() => setView('related-topics')}
               >
-                Related
+                Related Topic
               </button>
               <button type="button" aria-current={view === 'videos' ? 'page' : undefined} onClick={() => setView('videos')}>
                 Video ({(research.videos ?? []).length})
@@ -1887,6 +1995,28 @@ export default function ResearchDiscovery({
                     </div>
                   </details>
                   <p className="source-match-count">{visibleVideos.length} of {(research.videos ?? []).length} videos match · Showing {Math.min(resultPageLimit, visibleVideos.length)}</p>
+                  {videoRefreshState?.researchId === research.id && (
+                    <div className={`video-refresh-status is-${videoRefreshState.status}`} role={['checking', 'refreshing'].includes(videoRefreshState.status) ? 'status' : 'alert'}>
+                      <p>{videoRefreshState.status === 'checking'
+                        ? 'Checking whether YouTube is configured on this deployment…'
+                        : videoRefreshState.status === 'refreshing'
+                          ? 'YouTube is configured. Refreshing this saved search with the current provider settings…'
+                          : videoRefreshState.message}</p>
+                      {['unconfigured', 'error'].includes(videoRefreshState.status) && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            videoRefreshAttemptRef.current = '';
+                            setVideoRefreshState(null);
+                            setResearch((current) => current ? { ...current } : current);
+                          }}
+                        >
+                          Check again
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {(research.videoWarnings ?? []).map((warning) => (
                     <p className="video-provider-warning" key={warning}>{warning}</p>
                   ))}

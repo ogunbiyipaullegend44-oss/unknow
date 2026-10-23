@@ -1189,6 +1189,11 @@
   white-space: nowrap;
 }
 
+.research-tabs .research-related-topics-tab {
+  min-width: max-content;
+  white-space: nowrap;
+}
+
 .research-tabs button[aria-current='page'] {
   border-color: var(--accent);
   color: var(--accent);
@@ -1351,6 +1356,33 @@
 .source-match-count {
   color: var(--text-0);
   font-weight: 600;
+}
+
+.video-refresh-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-1);
+}
+
+.video-refresh-status p {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.video-refresh-status.is-unconfigured,
+.video-refresh-status.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.video-refresh-status.is-refreshed {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .video-provider-warning {

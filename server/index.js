@@ -7,6 +7,7 @@ import {
   compactResearchTopicQuery,
 } from '../src/utils/researchQuery.js';
 import {
+  buildCurrentAffairsVideoQuery,
   buildCurrentAffairsSearchQuery,
   currentAffairsTimeRange,
   isCurrentAffairsSearch,
@@ -25,6 +26,10 @@ import {
   generateAiTopicOverview,
   validateAiTopicOverviewRequest,
 } from './aiTopicOverview.js';
+import {
+  generateAiRelatedTopics,
+  validateAiRelatedTopicsRequest,
+} from './aiRelatedTopics.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = join(ROOT, 'dist');
@@ -671,7 +676,9 @@ async function discoverVideoSources(question, fetchImpl, {
   youtubeApiKey = '',
 } = {}) {
   const exactSearch = [question, region].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-  const search = buildResearchSearchQuery(question, region);
+  const search = isCurrentAffairsSearch(question, { year, month, fromYear, toYear })
+    ? buildCurrentAffairsVideoQuery(question, region)
+    : buildResearchSearchQuery(question, region);
   const broadSearch = compactVideoSearch(question, region);
   const shouldRetryWithCompactTerms = search.toLocaleLowerCase() === exactSearch.toLocaleLowerCase() &&
     broadSearch !== search.toLocaleLowerCase();
@@ -1165,6 +1172,46 @@ export function createRequestHandler({
       return;
     }
 
+    if (url.pathname === '/api/research/related-topics' && request.method === 'POST') {
+      const address = request.socket?.remoteAddress || 'unknown';
+      const now = Date.now();
+      const current = aiRequestsByAddress.get(address);
+      if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+        aiRequestsByAddress.set(address, { startedAt: now, count: 0 });
+      }
+      const limit = aiRequestsByAddress.get(address);
+      limit.count += 1;
+      if (limit.count > 10) {
+        sendJson(response, 429, {
+          error: 'Too many AI related-topic requests were sent from this device. Please wait 15 minutes and try again.',
+        });
+        return;
+      }
+
+      try {
+        const body = await readJson(request);
+        const validationError = validateAiRelatedTopicsRequest(body);
+        if (validationError) {
+          sendJson(response, 400, { error: validationError });
+          return;
+        }
+        const result = await generateAiRelatedTopics({
+          question: body.question.trim(),
+          region: body.region?.trim() ?? '',
+          areas: body.areas ?? [],
+          apiKey: anthropicApiKey,
+          model: anthropicModel,
+          fetchImpl,
+        });
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, error.status || 502, {
+          error: error.message || 'AI related topics could not be generated.',
+        });
+      }
+      return;
+    }
+
     if (url.pathname === '/api/research/ai-relevance' && request.method === 'POST') {
       const address = request.socket?.remoteAddress || 'unknown';
       const now = Date.now();
@@ -1199,6 +1246,59 @@ export function createRequestHandler({
       } catch (error) {
         sendJson(response, error.status || 502, {
           error: error.message || 'AI relevance assessment could not be completed.',
+        });
+      }
+      return;
+    }
+
+    if (url.pathname === '/api/research/videos' && request.method === 'POST') {
+      const address = request.socket?.remoteAddress || 'unknown';
+      const now = Date.now();
+      const current = requestsByAddress.get(address);
+      if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+        requestsByAddress.set(address, { startedAt: now, count: 0 });
+      }
+      const limit = requestsByAddress.get(address);
+      limit.count += 1;
+      if (limit.count > RATE_LIMIT) {
+        sendJson(response, 429, {
+          error: 'Too many research requests were sent from this device. Please wait 15 minutes and try again.',
+        });
+        return;
+      }
+
+      try {
+        const body = await readJson(request);
+        const validationError = validateResearchRequest({
+          ...body,
+          purposes: ['general'],
+        });
+        if (validationError) {
+          sendJson(response, 400, { error: validationError });
+          return;
+        }
+        const result = await discoverVideoSources(body.question.trim(), fetchImpl, {
+          region: body.region?.trim() ?? '',
+          year: body.year ?? null,
+          month: body.month ?? '',
+          fromYear: body.fromYear ?? null,
+          toYear: body.toYear ?? null,
+          youtubeApiKey,
+        });
+        if (result.failed) {
+          sendJson(response, 502, {
+            error: `Video discovery failed. ${result.warnings.join(' ')}`,
+          });
+          return;
+        }
+        sendJson(response, 200, {
+          videos: result.videos,
+          videoProviders: result.providers,
+          videoWarnings: result.warnings,
+        });
+      } catch (error) {
+        sendJson(response, error.status || 502, {
+          error: error.message || 'Video discovery could not be completed.',
         });
       }
       return;

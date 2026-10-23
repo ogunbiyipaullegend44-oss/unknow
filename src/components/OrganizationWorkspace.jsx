@@ -624,9 +624,6 @@ export default function OrganizationWorkspace({
           </p>
           {page === 'org-dashboard' && <h2 className="organization-dashboard-title">Dashboard</h2>}
         </div>
-        {page === 'org-dashboard' && (
-          <button type="button" className="btn btn-primary" onClick={() => onNavigateResearch('new-research')}>New research</button>
-        )}
       </header>
       {storageError && <p className="discovery-warning" role="alert">{storageError}</p>}
       {projectError && <p className="discovery-warning" role="alert">{projectError}</p>}

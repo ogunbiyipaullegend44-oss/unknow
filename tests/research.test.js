@@ -8,6 +8,7 @@ import {
 } from '../server/research.js';
 import { buildResearchSearchQuery } from '../src/utils/researchQuery.js';
 import {
+  buildCurrentAffairsVideoQuery,
   buildCurrentAffairsSearchQuery,
   currentAffairsTimeRange,
   isCurrentAffairsSearch,
@@ -284,6 +285,7 @@ test('current-affairs search intent expands update queries into timely, topic-sp
   assert.equal(isCurrentAffairsSearch('upcoming Nigeria election 2027'), true);
   assert.equal(currentAffairsTimeRange('upcoming Nigeria election'), 'year');
   assert.equal(currentAffairsTimeRange('update on Nigeria election'), 'month');
+  assert.match(buildCurrentAffairsVideoQuery('update on Nigeria election'), /^Nigeria election latest news$/i);
 });
 
 test('research provider queries keep recurring topic words and drop question filler', () => {
@@ -1638,6 +1640,54 @@ test('research API searches YouTube with a server-side key and requests up to fi
   assert.equal(youtubeUrl.searchParams.get('publishedAfter'), '2024-03-01T00:00:00Z');
   assert.equal(youtubeUrl.searchParams.get('publishedBefore'), '2024-03-31T23:59:59Z');
   assert.equal(JSON.stringify(body).includes('test-server-key'), false);
+});
+
+test('video refresh route reruns video discovery using the currently configured YouTube key', async (t) => {
+  let youtubeUrl;
+  const server = createServer({
+    youtubeApiKey: 'new-server-key',
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      if (parsed.hostname === 'www.googleapis.com') {
+        youtubeUrl = parsed;
+        return Response.json({
+          items: [{
+            id: { videoId: 'freshvideo1' },
+            snippet: {
+              title: 'Nigeria election latest news',
+              description: 'Latest developments in the Nigeria election.',
+              channelTitle: 'News Channel',
+              publishedAt: '2026-10-22T09:30:00Z',
+            },
+          }],
+        });
+      }
+      if (['peertube.tv', 'framatube.org', 'tilvids.com'].includes(parsed.hostname)) {
+        return Response.json({ data: [] });
+      }
+      return Response.json({ data: [] });
+    },
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/videos`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question: 'update on Nigeria election',
+      region: 'Nigeria',
+    }),
+  });
+  const result = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(youtubeUrl.searchParams.get('key'), 'new-server-key');
+  assert.match(youtubeUrl.searchParams.get('q'), /Nigeria election latest news/i);
+  assert.equal(result.videos.length, 1);
+  assert.equal(result.videos[0].title, 'Nigeria election latest news');
+  assert.equal(result.videoWarnings.some((warning) => /add YOUTUBE_API_KEY/.test(warning)), false);
+  assert.equal(JSON.stringify(result).includes('new-server-key'), false);
 });
 
 test('research API paginates video providers and returns more than twenty results', async (t) => {

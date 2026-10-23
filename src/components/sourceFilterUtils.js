@@ -119,6 +119,13 @@ export function matchesQuestionRelevance(text, question) {
   return assessQuestionContext(text, question).relevant;
 }
 
+export function matchesVideoQuestion(video, question) {
+  return matchesQuestionRelevance(
+    [video?.title, video?.description].filter(Boolean).join('. '),
+    question,
+  );
+}
+
 export function sourceSearchText(source) {
   if (typeof source.filterSearchText === 'string') return source.filterSearchText;
   return [

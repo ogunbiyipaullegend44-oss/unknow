@@ -6,6 +6,7 @@ import {
   dateFilterMatches,
   evidenceTypesFor,
   matchesSourceFilters,
+  matchesVideoQuestion,
   organizationTypesFor,
   removableFilterChips,
   questionTerms,
@@ -193,6 +194,17 @@ test('question context excludes title-only matches and requires concepts in one 
   assert.equal(sameSentence.relevant, true);
   assert.match(sameSentence.supportingSentence, /air pollution.*asthma rates/);
   assert.equal(assessQuestionContext('', question).status, 'no-content');
+});
+
+test('video question matching uses relevant title context when the description is sparse', () => {
+  assert.equal(matchesVideoQuestion({
+    title: 'Nigeria election: latest developments',
+    description: '',
+  }, 'update on Nigeria election'), true);
+  assert.equal(matchesVideoQuestion({
+    title: 'Nigeria travel guide',
+    description: 'A general overview of travel destinations.',
+  }, 'update on Nigeria election'), false);
 });
 
 test('custom and preset date filters use publication dates, not retrieval time', () => {
