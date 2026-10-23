@@ -51,14 +51,6 @@ function sourceRecords(research) {
         ? 'Search-provider extracted text was screened; the original page was not independently fetched or verified.'
         : 'This is a search-result snippet; the original page was not fetched or reviewed.',
     })),
-    ...(research.videos ?? []).map((source) => ({
-      ...source,
-      evidenceText: source.description || '',
-      evidenceLocation: 'Video description',
-      provider: source.platform || 'Video platform',
-      publicationDate: source.publishedAt || 'Not available',
-      contextLimitation: 'Only public video metadata and description were retrieved; the video was not reviewed.',
-    })),
   ];
 }
 

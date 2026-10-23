@@ -13,6 +13,7 @@ import {
   sortSources,
   sourceGeographyText,
   sourceSearchText,
+  videoHref,
 } from '../src/components/sourceFilterUtils.js';
 
 const BASE_FILTERS = {
@@ -205,6 +206,23 @@ test('video question matching uses relevant title context when the description i
     title: 'Nigeria travel guide',
     description: 'A general overview of travel destinations.',
   }, 'update on Nigeria election'), false);
+});
+
+test('video links are available for display only when they have a safe https URL or recoverable YouTube ID', () => {
+  assert.equal(videoHref({
+    url: 'https://www.youtube.com/watch?v=abcdefghijk',
+  }), 'https://www.youtube.com/watch?v=abcdefghijk');
+  assert.equal(videoHref({
+    id: 'youtube:abcdefghijk',
+  }), 'https://www.youtube.com/watch?v=abcdefghijk');
+  assert.equal(videoHref({
+    id: 'peertube:example.org:video-1',
+    url: 'javascript:alert(1)',
+  }), '');
+  assert.equal(videoHref({
+    id: 'peertube:example.org:video-1',
+    url: 'http://example.org/videos/watch/video-1',
+  }), '');
 });
 
 test('custom and preset date filters use publication dates, not retrieval time', () => {

@@ -1403,6 +1403,13 @@
   overflow-wrap: anywhere;
 }
 
+.video-watch-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
 .web-result-description {
   margin: 0 0 12px;
   color: var(--text-1);

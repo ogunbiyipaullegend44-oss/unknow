@@ -126,6 +126,21 @@ export function matchesVideoQuestion(video, question) {
   );
 }
 
+export function videoHref(video) {
+  const value = typeof video?.url === 'string' ? video.url.trim() : '';
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:') return url.href;
+  } catch {
+    // Fall back to a canonical YouTube URL when older records lack a URL.
+  }
+  if (typeof video?.id === 'string') {
+    const youtubeId = video.id.match(/^youtube:([\w-]{11})$/)?.[1];
+    if (youtubeId) return `https://www.youtube.com/watch?v=${youtubeId}`;
+  }
+  return '';
+}
+
 export function sourceSearchText(source) {
   if (typeof source.filterSearchText === 'string') return source.filterSearchText;
   return [

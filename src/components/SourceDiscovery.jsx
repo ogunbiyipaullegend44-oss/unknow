@@ -124,26 +124,6 @@ function makeItems(research) {
       openAccess: false,
       query: research.question,
     })),
-    ...(research.videos ?? []).map((video) => ({
-      id: `video:${video.id}`,
-      kind: 'video',
-      title: video.title,
-      url: video.url,
-      author: video.channel || '',
-      publisher: video.platform || '',
-      organization: video.channel || video.platform || '',
-      host: sourceHost(video.url),
-      date: video.publishedAt || '',
-      type: 'Video',
-      description: video.description || '',
-      rawContent: video.description || '',
-      abstract: '',
-      evidence: video.description || '',
-      provider: video.platform || 'Video platform',
-      openAccessUrl: '',
-      openAccess: false,
-      query: research.question,
-    })),
   ].filter((item) => item.title && item.url);
 }
 
@@ -311,7 +291,7 @@ export default function SourceDiscovery({
   useEffect(() => {
     const previous = previousResearch.current;
     const isAppend = previous.id === research.id &&
-      ['sources', 'webSources', 'videos'].every((key) => {
+      ['sources', 'webSources'].every((key) => {
         const before = previous[key] ?? [];
         const after = research[key] ?? [];
         return before.length <= after.length &&
@@ -326,7 +306,7 @@ export default function SourceDiscovery({
 
     const added = {};
     let hasAddedItems = false;
-    for (const key of ['sources', 'webSources', 'videos']) {
+    for (const key of ['sources', 'webSources']) {
       const before = previous[key] ?? [];
       const after = research[key] ?? [];
       added[key] = after.slice(before.length);

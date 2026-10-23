@@ -7,9 +7,14 @@ import RelatedTopics from './RelatedTopics.jsx';
 import TrendingDiscover from './TrendingDiscover.jsx';
 import OrganizationWorkspace from './OrganizationWorkspace.jsx';
 import CommunityResearchHub from './CommunityResearchHub.jsx';
-import { matchesQuestionRelevance, matchesVideoQuestion } from './sourceFilterUtils.js';
+import {
+  matchesQuestionRelevance,
+  matchesVideoQuestion,
+  videoHref,
+} from './sourceFilterUtils.js';
 import { addResearchHistoryEntry, compactResearchForHistory } from './researchHistory.js';
 import { getTimeGreeting } from './landingGreeting.js';
+import { shouldSubmitResearchOnEnter } from '../utils/researchKeyboard.js';
 import AccountCenter from './AccountCenter.jsx';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
 import { neon } from '../community/neonClient.js';
@@ -627,6 +632,7 @@ export default function ResearchDiscovery({
     if (!research || view !== 'videos') return [];
     const terms = deferredQuery.trim().toLocaleLowerCase();
     return (research.videos ?? [])
+      .filter((video) => videoHref(video))
       .filter((video) => matchesVideoQuestion(video, research.question))
       .filter((video) => matchesVideoDate(video, dateRange))
       .filter((video) => !terms || `${video.title} ${video.description} ${video.channel} ${video.platform}`
@@ -1535,12 +1541,22 @@ export default function ResearchDiscovery({
               ref={questionInputRef}
               id="research-question"
               value={question}
+              onKeyDown={(event) => {
+                if (!shouldSubmitResearchOnEnter({
+                  key: event.key,
+                  shiftKey: event.shiftKey,
+                  isComposing: event.nativeEvent.isComposing,
+                  isDesktop: !window.matchMedia('(max-width: 700px)').matches,
+                })) return;
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }}
               onChange={(event) => {
                 setQuestion(event.target.value);
               }}
               rows={1}
               required
-              aria-describedby={research ? 'question-help' : undefined}
+              aria-describedby={research ? 'question-help research-enter-help' : 'research-enter-help'}
             />
             <button
               className="btn btn-primary research-submit research-submit-icon"
@@ -1554,6 +1570,7 @@ export default function ResearchDiscovery({
           </div>
           <div className="research-input-meta">
             {research && <span id="question-help">Update this question and its search settings.</span>}
+            <span id="research-enter-help">Desktop: press Enter to start research; Shift+Enter adds a new line.</span>
             {question.length > 0 && (
               <span id="question-count">{question.length.toLocaleString()} characters</span>
             )}
@@ -1676,7 +1693,7 @@ export default function ResearchDiscovery({
                   setView('discovery');
                 }}
               >
-                Sources ({research.sources.length + (research.webSources ?? []).length + (research.videos ?? []).length})
+                Sources ({research.sources.length + (research.webSources ?? []).length})
               </button>
               <button
                 type="button"
@@ -2038,7 +2055,10 @@ export default function ResearchDiscovery({
                           <span className="source-type">{video.platform} video</span>
                           <span>{formatVideoDate(video)}</span>
                         </div>
-                        <h3><a href={video.url} target="_blank" rel="noopener noreferrer">{video.title}<Icon name="external" size={15} /></a></h3>
+                        <h3><a href={videoHref(video)} target="_blank" rel="noopener noreferrer">{video.title}<Icon name="external" size={15} /></a></h3>
+                        <a className="btn btn-secondary video-watch-link" href={videoHref(video)} target="_blank" rel="noopener noreferrer">
+                          Watch video <Icon name="external" size={15} />
+                        </a>
                         <p className="source-publisher">
                           {video.channel || 'Channel information not available'} · Public video metadata
                         </p>

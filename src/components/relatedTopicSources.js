@@ -26,17 +26,6 @@ export function normalizeRelatedSources(result) {
       description: source.description || '',
       provider: source.provider || 'Web search',
     })),
-    ...(result.videos ?? []).map((video) => ({
-      ...video,
-      id: `video:${video.id}`,
-      kind: 'video',
-      author: video.channel || '',
-      publisher: video.platform || '',
-      type: 'Video',
-      date: video.publishedAt || '',
-      description: video.description || '',
-      provider: video.platform || 'Video platform',
-    })),
   ]
     .filter((source) => source.title && source.url)
     .map((source) => ({ ...source, category: categoryFor(source) }));
@@ -62,13 +51,6 @@ export function groupRelatedSources(sources, sourceLimit = 'all') {
       category,
       limit === 'all' ? grouped.get(category) : grouped.get(category).slice(0, limit),
     ]);
-
-  if (!grouped.has('Videos and YouTube')) {
-    groups.push(['Videos and YouTube', []]);
-  } else if (limit !== 'all') {
-    const videoGroup = groups.find(([category]) => category === 'Videos and YouTube');
-    if (videoGroup) videoGroup[1] = videoGroup[1].slice(0, limit);
-  }
 
   return groups;
 }

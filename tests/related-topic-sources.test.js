@@ -31,7 +31,7 @@ test('related topic searches honor 20, 50, 100, and unlimited source choices', (
   assert.equal(groupRelatedSources(sources, 'all')[0][1].length, 110);
 });
 
-test('related source results include video records under the Videos and YouTube category', () => {
+test('related topic source results leave video records for the dedicated video view', () => {
   const sources = normalizeRelatedSources({
     sources: [source('academic')],
     webSources: [{
@@ -48,23 +48,18 @@ test('related source results include video records under the Videos and YouTube 
     }],
   });
   const groups = groupRelatedSources(sources, 'all');
-  const videoGroup = groups.find(([category]) => category === 'Videos and YouTube');
 
-  assert.ok(videoGroup);
-  assert.equal(videoGroup[1].length, 1);
-  assert.equal(videoGroup[1][0].kind, 'video');
-  assert.equal(videoGroup[1][0].provider, 'PeerTube');
+  assert.equal(sources.some(({ kind }) => kind === 'video'), false);
+  assert.equal(groups.some(([category]) => category === 'Videos and YouTube'), false);
+  assert.equal(sources.length, 2);
 });
 
-test('related results show an empty video category and retain source category separation', () => {
+test('related results retain source category separation without a video category', () => {
   const groups = groupRelatedSources(normalizeRelatedSources({
     sources: [source('academic')],
     videos: [],
   }));
 
   assert.ok(groups.some(([category]) => category === 'Academic Research'));
-  assert.deepEqual(
-    groups.find(([category]) => category === 'Videos and YouTube'),
-    ['Videos and YouTube', []],
-  );
+  assert.equal(groups.some(([category]) => category === 'Videos and YouTube'), false);
 });

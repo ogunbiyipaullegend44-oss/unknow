@@ -87,7 +87,7 @@ export default function InstallPrompt() {
       </div>
       <div className="install-notice-actions">
         <button className="btn btn-primary" type="button" onClick={install}>
-          {installEvent ? 'Install' : 'How to install'}
+          Install
         </button>
         <button
           className="icon-btn install-notice-dismiss"

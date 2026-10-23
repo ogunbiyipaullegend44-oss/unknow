@@ -12,7 +12,6 @@ export default function ClaimEvidence({ research }) {
   const sourcesWithText = [
     ...(research.sources ?? []),
     ...(research.webSources ?? []),
-    ...(research.videos ?? []),
   ].filter((source) => source.abstract || source.description).length;
 
   useEffect(() => setPage(0), [research]);

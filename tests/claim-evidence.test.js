@@ -77,3 +77,17 @@ test('does not create factual claims when retrieved text is unavailable or unrel
     webSources: [],
   })), []);
 });
+
+test('video descriptions are not added to the claims and evidence source register', () => {
+  assert.deepEqual(buildEvidenceStatements(research({
+    sources: [],
+    webSources: [],
+    videos: [{
+      id: 'video-1',
+      title: 'Social media and sleep',
+      url: 'https://www.youtube.com/watch?v=abcdefghijk',
+      description: 'Increased nightly social media use was associated with shorter sleep duration.',
+      platform: 'YouTube',
+    }],
+  })), []);
+});
