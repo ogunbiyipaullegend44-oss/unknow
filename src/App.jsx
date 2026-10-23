@@ -10,6 +10,15 @@ export default function App() {
   const { project } = useProject();
   const { loaded, mapProviderSource } = useAppConfig();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [showStartupSplash, setShowStartupSplash] = useState(true);
+  const isResetPasswordRoute = window.location.pathname.replace(/\/+$/, '') === '/reset-password';
+  const isShowingStartupSplash = !isResetPasswordRoute && showStartupSplash;
+
+  useEffect(() => {
+    if (isResetPasswordRoute) return undefined;
+    const timer = window.setTimeout(() => setShowStartupSplash(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [isResetPasswordRoute]);
 
   useEffect(() => {
     const updateConnection = () => setIsOnline(navigator.onLine);
@@ -22,8 +31,14 @@ export default function App() {
   }, []);
 
   let screen;
-  if (window.location.pathname.replace(/\/+$/, '') === '/reset-password') {
+  if (isResetPasswordRoute) {
     screen = <ResetPasswordPage />;
+  } else if (isShowingStartupSplash) {
+    screen = (
+      <main className="app-startup-splash" role="status" aria-label="Brinfolynk">
+        <img src="/brinfolynk-splash.png" alt="Brinfolynk" />
+      </main>
+    );
   } else if (!loaded) {
     // Wait until the config layer has tried to read localStorage + the config
     // file before selecting the first-run or returning-user experience.
@@ -42,12 +57,12 @@ export default function App() {
 
   return (
     <>
-      {!isOnline && (
+      {!isShowingStartupSplash && !isOnline && (
         <div className="offline-notice" role="status">
           You’re offline. Saved work stays available; live research, maps, and account features need internet.
         </div>
       )}
-      <InstallPrompt />
+      {!isShowingStartupSplash && <InstallPrompt />}
       {screen}
     </>
   );

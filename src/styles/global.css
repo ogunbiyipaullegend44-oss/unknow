@@ -10,6 +10,22 @@ body,
   padding: 0;
 }
 
+.app-startup-splash {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-0);
+}
+
+.app-startup-splash img {
+  display: block;
+  width: clamp(96px, 24vw, 180px);
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
 .app-loading {
   display: grid;
   min-height: 100%;
