@@ -16,6 +16,7 @@ import { addResearchHistoryEntry, compactResearchForHistory } from './researchHi
 import { getTimeGreeting } from './landingGreeting.js';
 import { shouldSubmitResearchOnEnter } from '../utils/researchKeyboard.js';
 import { hasMoreResearchSources, mergeResearchSources } from './researchSourcePagination.js';
+import { matchesResearchMonths } from './researchMonthFilters.js';
 import AccountCenter from './AccountCenter.jsx';
 import { useCommunityAuth } from '../context/CommunityAuthContext.jsx';
 import { neon } from '../community/neonClient.js';
@@ -213,6 +214,7 @@ export default function ResearchDiscovery({
   const [startYear, setStartYear] = useState('');
   const [endYear, setEndYear] = useState('');
   const [month, setMonth] = useState('');
+  const [additionalMonths, setAdditionalMonths] = useState([]);
   const [purposes, setPurposes] = useState(['general']);
   const [research, setResearch] = useState(null);
   const [videoRefreshState, setVideoRefreshState] = useState(null);
@@ -612,8 +614,13 @@ export default function ResearchDiscovery({
         if (!source.publicationYear || source.publicationYear < fromYear || source.publicationYear > toYear) {
           return false;
         }
-        return fromYear !== toYear || !scope.month ||
-          source.publicationMonth === MONTHS.indexOf(scope.month) + 1;
+        const selectedMonths = scope.months?.length
+          ? scope.months
+          : scope.month
+            ? [scope.month]
+            : [];
+        return fromYear !== toYear || !selectedMonths.length ||
+          selectedMonths.includes(MONTHS[source.publicationMonth - 1]);
       })
       .filter((source) => matchesDate(source, dateRange))
       .filter((source) => {
@@ -636,6 +643,7 @@ export default function ResearchDiscovery({
     return (research.videos ?? [])
       .filter((video) => videoHref(video))
       .filter((video) => matchesVideoQuestion(video, research.question))
+      .filter((video) => matchesResearchMonths(video.publishedAt, research.scope))
       .filter((video) => matchesVideoDate(video, dateRange))
       .filter((video) => !terms || `${video.title} ${video.description} ${video.channel} ${video.platform}`
         .toLocaleLowerCase()
@@ -655,6 +663,7 @@ export default function ResearchDiscovery({
         source.rawContent || source.description || '',
         research.question,
       ))
+      .filter((source) => matchesResearchMonths(source.publishedAt, research.scope))
       .filter((source) => matchesWebDate(source, dateRange))
       .filter((source) => !terms || `${source.title} ${source.description} ${source.rawContent} ${source.provider}`
         .toLocaleLowerCase()
@@ -786,6 +795,9 @@ export default function ResearchDiscovery({
     setEndYear(toYear ? String(toYear) : '');
     setYear(scope.year ? String(scope.year) : '');
     setMonth(scope.month ?? '');
+    setAdditionalMonths(
+      (scope.months ?? []).filter((item) => item !== scope.month),
+    );
     setPurposes(research.analysis.purposes);
     setResearchScreen('results');
     setResearchOptionsOpen(false);
@@ -806,6 +818,9 @@ export default function ResearchDiscovery({
     const effectiveRegionMode = regionMode;
     const effectiveRegion = region;
     const effectiveDateRange = dateRange;
+    const selectedMonths = dateMode === 'range' && startYear === endYear
+      ? [...new Set([month, ...additionalMonths].filter(Boolean))]
+      : [];
     const configuredView = researchDefaults?.default_view;
     const effectiveView = ['discovery', 'sources'].includes(configuredView)
       ? configuredView
@@ -854,7 +869,7 @@ export default function ResearchDiscovery({
           year: null,
           fromYear: dateMode === 'range' ? Number(startYear) : null,
           toYear: dateMode === 'range' ? Number(endYear) : null,
-          month: dateMode === 'range' && startYear === endYear ? month : '',
+          month: selectedMonths.length === 1 ? selectedMonths[0] : '',
         }),
       });
       let result;
@@ -878,6 +893,10 @@ export default function ResearchDiscovery({
 
       const sessionResult = {
         ...result,
+        scope: {
+          ...result.scope,
+          months: selectedMonths,
+        },
         id: currentResearchId ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         ...(followUp?.parentResearch ? {
           parentProjectId: followUp.parentResearch.id,
@@ -898,6 +917,10 @@ export default function ResearchDiscovery({
       setEndYear(resultToYear ? String(resultToYear) : '');
       setYear(result.scope?.year ? String(result.scope.year) : '');
       setMonth(result.scope?.month ?? '');
+      setAdditionalMonths(
+        (selectedMonths.length ? selectedMonths : result.scope?.months ?? [])
+          .filter((item) => item !== result.scope?.month),
+      );
       setNotice(
         `Research saved to browser history. Found ${result.sources.length} scholarly source${result.sources.length === 1 ? '' : 's'}, ${(result.webSources ?? []).length} web result${(result.webSources ?? []).length === 1 ? '' : 's'}, and ${(result.videos ?? []).length} video${(result.videos ?? []).length === 1 ? '' : 's'}.`,
       );
@@ -1023,6 +1046,9 @@ export default function ResearchDiscovery({
     setEndYear(savedToYear ? String(savedToYear) : '');
     setYear(saved.scope?.year ? String(saved.scope.year) : '');
     setMonth(saved.scope?.month ?? '');
+    setAdditionalMonths(
+      (saved.scope?.months ?? []).filter((item) => item !== saved.scope?.month),
+    );
     setPurposes(saved.analysis.purposes);
     setError('');
     setNotice('Opened saved research from this browser. Its source list reflects the original search time.');
@@ -1584,13 +1610,34 @@ export default function ResearchDiscovery({
                     />
                   </label>
                   {startYear && startYear === endYear && (
-                    <label>
-                      <span>Month <small>(optional)</small></span>
-                      <select value={month} onChange={(event) => setMonth(event.target.value)}>
-                        <option value="">All months</option>
-                        {MONTHS.map((item) => <option value={item} key={item}>{item}</option>)}
-                      </select>
-                    </label>
+                    <div className="scope-month-filters">
+                      <label>
+                        <span>Month <small>(optional)</small></span>
+                        <select value={month} onChange={(event) => setMonth(event.target.value)}>
+                          <option value="">All months</option>
+                          {MONTHS.map((item) => <option value={item} key={item}>{item}</option>)}
+                        </select>
+                      </label>
+                      <fieldset className="scope-month-multiselect">
+                        <legend>Also include months</legend>
+                        <div className="scope-month-options">
+                          {MONTHS.map((item) => (
+                            <label key={item}>
+                              <input
+                                type="checkbox"
+                                checked={additionalMonths.includes(item)}
+                                onChange={(event) => {
+                                  setAdditionalMonths((current) => event.target.checked
+                                    ? [...new Set([...current, item])]
+                                    : current.filter((selected) => selected !== item));
+                                }}
+                              />
+                              <span>{item}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                    </div>
                   )}
                 </>
               )}
