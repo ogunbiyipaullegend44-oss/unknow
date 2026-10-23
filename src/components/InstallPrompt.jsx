@@ -19,7 +19,6 @@ export default function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState(null);
   const [isAppInstalled, setIsAppInstalled] = useState(isInstalled);
   const [isVisible, setIsVisible] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
     if (isAppInstalled) return undefined;
@@ -32,7 +31,6 @@ export default function InstallPrompt() {
     const handleAppInstalled = () => {
       setIsAppInstalled(true);
       setIsVisible(false);
-      setShowInstructions(false);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -48,10 +46,13 @@ export default function InstallPrompt() {
   if (isAppInstalled || !isVisible) return null;
 
   const instructions = getPlatform();
+  const showInstallInstructions = () => {
+    window.alert(`${instructions.heading}\n\n${instructions.steps.join('\n')}`);
+  };
 
   const install = async () => {
     if (!installEvent) {
-      setShowInstructions(true);
+      showInstallInstructions();
       return;
     }
 
@@ -62,42 +63,23 @@ export default function InstallPrompt() {
       if (choice.outcome === 'accepted') {
         setIsVisible(false);
       } else {
-        setShowInstructions(true);
+        showInstallInstructions();
       }
     } catch (error) {
       console.error('Brinfolynk install prompt could not be opened:', error);
       setInstallEvent(null);
-      setShowInstructions(true);
+      showInstallInstructions();
     }
   };
 
   return (
-    <aside className="install-notice" aria-label="Install Brinfolynk" role="status">
-      <div className="install-notice-copy">
-        <strong>Install Brinfolynk</strong>
-        <span>Add the research workspace to your device for quick access.</span>
-        {showInstructions && (
-          <div className="install-instructions">
-            <strong>{instructions.heading}</strong>
-            <ol>
-              {instructions.steps.map((step) => <li key={step}>{step}</li>)}
-            </ol>
-          </div>
-        )}
-      </div>
-      <div className="install-notice-actions">
-        <button className="btn btn-primary" type="button" onClick={install}>
-          Install
-        </button>
-        <button
-          className="icon-btn install-notice-dismiss"
-          type="button"
-          aria-label="Dismiss install notification"
-          onClick={() => setIsVisible(false)}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </div>
-    </aside>
+    <button
+      className="btn btn-primary install-notice"
+      type="button"
+      aria-label="Install Brinfolynk"
+      onClick={install}
+    >
+      Install
+    </button>
   );
 }
