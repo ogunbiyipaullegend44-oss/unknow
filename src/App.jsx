@@ -33,18 +33,10 @@ export default function App() {
   let screen;
   if (isResetPasswordRoute) {
     screen = <ResetPasswordPage />;
-  } else if (isShowingStartupSplash) {
+  } else if (isShowingStartupSplash || !loaded) {
     screen = (
       <main className="app-startup-splash" role="status" aria-label="Brinfolynk">
         <img src="/brinfolynk-splash.png" alt="Brinfolynk" />
-      </main>
-    );
-  } else if (!loaded) {
-    // Wait until the config layer has tried to read localStorage + the config
-    // file before selecting the first-run or returning-user experience.
-    screen = (
-      <main className="app-loading" role="status" aria-live="polite">
-        Loading Brinfolynk…
       </main>
     );
   } else if (mapProviderSource === null) {
