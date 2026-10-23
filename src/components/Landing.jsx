@@ -40,7 +40,6 @@ export default function Landing() {
         <div className="landing-research-screen" hidden={!showResearch}>
           <Suspense fallback={<p className="landing-loading" role="status">Opening research workspace…</p>}>
             <ResearchDiscovery
-              onBack={() => setShowResearch(false)}
               initialPage={researchEntry.page}
               entryKey={researchEntry.id}
             />

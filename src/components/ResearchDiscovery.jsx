@@ -186,7 +186,6 @@ function Icon({ name, size = 18 }) {
 }
 
 export default function ResearchDiscovery({
-  onBack,
   initialPage = 'research',
   entryKey,
 }) {
@@ -1242,7 +1241,7 @@ export default function ResearchDiscovery({
             <button
               type="button"
               className="btn btn-secondary research-home-button"
-              onClick={onBack}
+              onClick={startNewResearch}
             >
               HOME
             </button>
