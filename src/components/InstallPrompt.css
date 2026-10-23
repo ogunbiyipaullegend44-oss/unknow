@@ -1,8 +1,55 @@
 .install-notice {
   position: fixed;
   z-index: 1900;
-  right: max(12px, env(safe-area-inset-right));
-  bottom: max(72px, calc(env(safe-area-inset-bottom) + 60px));
-  padding: 9px 18px;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: min(360px, calc(100vw - 32px));
+  padding: 20px;
+  color: var(--text-0);
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: 14px;
   box-shadow: var(--shadow-lg);
+}
+
+.install-notice h2 {
+  margin: 0 28px 8px 0;
+  font-size: 1rem;
+}
+
+.install-notice p,
+.install-notice ol {
+  margin: 0 0 14px;
+  color: var(--text-1);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.install-notice ol {
+  padding-left: 20px;
+}
+
+.install-notice-dismiss {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  color: var(--text-1);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.install-notice-dismiss:hover {
+  background: var(--bg-hover);
+}
+
+.install-notice-action {
+  padding: 9px 18px;
 }

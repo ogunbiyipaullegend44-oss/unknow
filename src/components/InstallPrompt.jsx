@@ -19,6 +19,7 @@ export default function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState(null);
   const [isAppInstalled, setIsAppInstalled] = useState(isInstalled);
   const [isVisible, setIsVisible] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
     if (isAppInstalled) return undefined;
@@ -27,6 +28,7 @@ export default function InstallPrompt() {
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setInstallEvent(event);
+      setShowInstructions(false);
     };
     const handleAppInstalled = () => {
       setIsAppInstalled(true);
@@ -46,13 +48,10 @@ export default function InstallPrompt() {
   if (isAppInstalled || !isVisible) return null;
 
   const instructions = getPlatform();
-  const showInstallInstructions = () => {
-    window.alert(`${instructions.heading}\n\n${instructions.steps.join('\n')}`);
-  };
 
   const install = async () => {
     if (!installEvent) {
-      showInstallInstructions();
+      setShowInstructions(true);
       return;
     }
 
@@ -63,23 +62,40 @@ export default function InstallPrompt() {
       if (choice.outcome === 'accepted') {
         setIsVisible(false);
       } else {
-        showInstallInstructions();
+        setShowInstructions(true);
       }
     } catch (error) {
       console.error('Brinfolynk install prompt could not be opened:', error);
       setInstallEvent(null);
-      showInstallInstructions();
+      setShowInstructions(true);
     }
   };
 
   return (
-    <button
-      className="btn btn-primary install-notice"
-      type="button"
-      aria-label="Install Brinfolynk"
-      onClick={install}
-    >
-      Install
-    </button>
+    <aside className="install-notice" role="status" aria-live="polite" aria-labelledby="install-notice-title">
+      <button
+        className="install-notice-dismiss"
+        type="button"
+        aria-label="Dismiss install notification"
+        onClick={() => setIsVisible(false)}
+      >
+        ×
+      </button>
+      <h2 id="install-notice-title">
+        {installEvent && !showInstructions ? 'Install Brinfolynk?' : instructions.heading}
+      </h2>
+      {installEvent && !showInstructions ? (
+        <p>Install Brinfolynk for quicker access from your device.</p>
+      ) : (
+        <ol>
+          {instructions.steps.map((step) => <li key={step}>{step}</li>)}
+        </ol>
+      )}
+      {installEvent && !showInstructions && (
+        <button className="btn btn-primary install-notice-action" type="button" onClick={install}>
+          Install
+        </button>
+      )}
+    </aside>
   );
 }
