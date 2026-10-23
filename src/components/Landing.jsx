@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import ThemeToggle from './ThemeToggle.jsx';
 import ClearAllDataButton from './ClearAllDataButton.jsx';
 import './Landing.css';
 
@@ -56,10 +55,6 @@ function LandingScreen({
 }) {
   return (
     <div className="landing">
-      <div className="landing-topbar">
-        <ThemeToggle />
-      </div>
-
       <div className={`landing-content${hasResearch ? '' : ' landing-content-splash'}`}>
         <div className={`landing-brand${hasResearch ? '' : ' landing-brand-splash'}`}>
           <div className="landing-brand-lockup">
