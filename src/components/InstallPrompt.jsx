@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { getInstallInstructions } from '../utils/installInstructions.js';
 import './InstallPrompt.css';
 
 function isInstalled() {
@@ -7,95 +6,52 @@ function isInstalled() {
     || window.navigator.standalone === true;
 }
 
-function getPlatform() {
-  return getInstallInstructions({
-    userAgent: window.navigator.userAgent,
-    platform: window.navigator.platform,
-    maxTouchPoints: window.navigator.maxTouchPoints,
-  });
-}
-
 export default function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState(null);
   const [isAppInstalled, setIsAppInstalled] = useState(isInstalled);
-  const [isVisible, setIsVisible] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
     if (isAppInstalled) return undefined;
 
-    const showInstallNotification = window.setTimeout(() => setIsVisible(true), 5000);
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       setInstallEvent(event);
-      setShowInstructions(false);
     };
     const handleAppInstalled = () => {
       setIsAppInstalled(true);
-      setIsVisible(false);
+      setInstallEvent(null);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.clearTimeout(showInstallNotification);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, [isAppInstalled]);
 
-  if (isAppInstalled || !isVisible) return null;
-
-  const instructions = getPlatform();
+  if (isAppInstalled || !installEvent) return null;
 
   const install = async () => {
-    if (!installEvent) {
-      setShowInstructions(true);
-      return;
-    }
-
     try {
       await installEvent.prompt();
-      const choice = await installEvent.userChoice;
+      await installEvent.userChoice;
       setInstallEvent(null);
-      if (choice.outcome === 'accepted') {
-        setIsVisible(false);
-      } else {
-        setShowInstructions(true);
-      }
     } catch (error) {
       console.error('Brinfolynk install prompt could not be opened:', error);
       setInstallEvent(null);
-      setShowInstructions(true);
     }
   };
 
   return (
-    <aside className="install-notice" role="status" aria-live="polite" aria-labelledby="install-notice-title">
-      <button
-        className="install-notice-dismiss"
-        type="button"
-        aria-label="Dismiss install notification"
-        onClick={() => setIsVisible(false)}
-      >
-        ×
-      </button>
-      <h2 id="install-notice-title">
-        {installEvent && !showInstructions ? 'Install Brinfolynk?' : instructions.heading}
-      </h2>
-      {installEvent && !showInstructions ? (
-        <p>Install Brinfolynk for quicker access from your device.</p>
-      ) : (
-        <ol>
-          {instructions.steps.map((step) => <li key={step}>{step}</li>)}
-        </ol>
-      )}
-      {installEvent && !showInstructions && (
-        <button className="btn btn-primary install-notice-action" type="button" onClick={install}>
-          Install
-        </button>
-      )}
-    </aside>
+    <button
+      className="btn btn-primary install-notice"
+      type="button"
+      aria-label="Install Brinfolynk"
+      onClick={install}
+    >
+      Install
+    </button>
   );
 }
