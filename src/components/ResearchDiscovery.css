@@ -1537,7 +1537,7 @@
 
   .research-form-stage-home {
     flex: 1 0 auto;
-    justify-content: center;
+    justify-content: flex-end;
   }
 
   .research-home-brand {
