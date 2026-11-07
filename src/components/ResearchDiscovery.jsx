@@ -15,6 +15,7 @@ import {
 import { addResearchHistoryEntry, compactResearchForHistory } from './researchHistory.js';
 import { getTimeGreeting } from './landingGreeting.js';
 import { shouldSubmitResearchOnEnter } from '../utils/researchKeyboard.js';
+import { apiUrl } from '../utils/apiUrl.js';
 import { hasMoreResearchSources, mergeResearchSources } from './researchSourcePagination.js';
 import { matchesResearchMonths } from './researchMonthFilters.js';
 import AccountCenter from './AccountCenter.jsx';
@@ -213,7 +214,6 @@ export default function ResearchDiscovery({
   const [year, setYear] = useState('');
   const [startYear, setStartYear] = useState('');
   const [endYear, setEndYear] = useState('');
-  const [month, setMonth] = useState('');
   const [additionalMonths, setAdditionalMonths] = useState([]);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [purposes, setPurposes] = useState(['general']);
@@ -296,7 +296,7 @@ export default function ResearchDiscovery({
 
     const refreshVideos = async () => {
       try {
-        const healthResponse = await fetch('/api/health');
+        const healthResponse = await fetch(apiUrl('/api/health'));
         let health;
         try {
           health = await healthResponse.json();
@@ -320,7 +320,7 @@ export default function ResearchDiscovery({
           status: 'refreshing',
         });
         const scope = research.scope ?? {};
-        const response = await fetch('/api/research/videos', {
+        const response = await fetch(apiUrl('/api/research/videos'), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -822,10 +822,7 @@ export default function ResearchDiscovery({
     setStartYear(fromYear ? String(fromYear) : '');
     setEndYear(toYear ? String(toYear) : '');
     setYear(scope.year ? String(scope.year) : '');
-    setMonth(scope.month ?? '');
-    setAdditionalMonths(
-      (scope.months ?? []).filter((item) => item !== scope.month),
-    );
+    setAdditionalMonths(scope.months?.length ? scope.months : scope.month ? [scope.month] : []);
     setPurposes(research.analysis.purposes);
     setResearchScreen('results');
     setResearchOptionsOpen(false);
@@ -847,7 +844,7 @@ export default function ResearchDiscovery({
     const effectiveRegion = region;
     const effectiveDateRange = dateRange;
     const selectedMonths = dateMode === 'range' && startYear === endYear
-      ? [...new Set([month, ...additionalMonths].filter(Boolean))]
+      ? [...new Set(additionalMonths)]
       : [];
     const configuredView = researchDefaults?.default_view;
     const effectiveView = ['discovery', 'sources'].includes(configuredView)
@@ -886,7 +883,7 @@ export default function ResearchDiscovery({
 
     setLoading(true);
     try {
-      const response = await fetch('/api/research', {
+      const response = await fetch(apiUrl('/api/research'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -944,10 +941,14 @@ export default function ResearchDiscovery({
       setStartYear(resultFromYear ? String(resultFromYear) : '');
       setEndYear(resultToYear ? String(resultToYear) : '');
       setYear(result.scope?.year ? String(result.scope.year) : '');
-      setMonth(result.scope?.month ?? '');
       setAdditionalMonths(
-        (selectedMonths.length ? selectedMonths : result.scope?.months ?? [])
-          .filter((item) => item !== result.scope?.month),
+        selectedMonths.length
+          ? selectedMonths
+          : result.scope?.months?.length
+            ? result.scope.months
+            : result.scope?.month
+              ? [result.scope.month]
+              : [],
       );
       setNotice(
         `Research saved to browser history. Found ${result.sources.length} scholarly source${result.sources.length === 1 ? '' : 's'}, ${(result.webSources ?? []).length} web result${(result.webSources ?? []).length === 1 ? '' : 's'}, and ${(result.videos ?? []).length} video${(result.videos ?? []).length === 1 ? '' : 's'}.`,
@@ -993,7 +994,7 @@ export default function ResearchDiscovery({
     setNotice('');
     try {
       const scope = research.scope ?? {};
-      const response = await fetch('/api/research/continue', {
+      const response = await fetch(apiUrl('/api/research/continue'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -1073,9 +1074,12 @@ export default function ResearchDiscovery({
     setStartYear(savedFromYear ? String(savedFromYear) : '');
     setEndYear(savedToYear ? String(savedToYear) : '');
     setYear(saved.scope?.year ? String(saved.scope.year) : '');
-    setMonth(saved.scope?.month ?? '');
     setAdditionalMonths(
-      (saved.scope?.months ?? []).filter((item) => item !== saved.scope?.month),
+      saved.scope?.months?.length
+        ? saved.scope.months
+        : saved.scope?.month
+          ? [saved.scope.month]
+          : [],
     );
     setPurposes(saved.analysis.purposes);
     setError('');
@@ -1639,22 +1643,6 @@ export default function ResearchDiscovery({
                   </label>
                   {startYear && startYear === endYear && (
                     <div className="scope-month-filters">
-                      <label>
-                        <span>Month <small>(optional)</small></span>
-                        <select
-                          value={month}
-                          onChange={(event) => {
-                            const nextMonth = event.target.value;
-                            setMonth(nextMonth);
-                            if (nextMonth) {
-                              setAdditionalMonths((current) => current.filter((item) => item !== nextMonth));
-                            }
-                          }}
-                        >
-                          <option value="">All months</option>
-                          {MONTHS.map((item) => <option value={item} key={item}>{item}</option>)}
-                        </select>
-                      </label>
                       <div className="scope-month-picker" ref={monthPickerRef}>
                         <button
                           className="scope-month-picker-toggle"
@@ -1663,7 +1651,7 @@ export default function ResearchDiscovery({
                           aria-controls="scope-month-options"
                           onClick={() => setMonthPickerOpen((open) => !open)}
                         >
-                          Also include months
+                          {additionalMonths.length ? 'Months' : 'Select months'}
                           {additionalMonths.length > 0 && ` (${additionalMonths.length} selected)`}
                           <span aria-hidden="true">{monthPickerOpen ? '−' : '+'}</span>
                         </button>
@@ -1671,7 +1659,7 @@ export default function ResearchDiscovery({
                           <fieldset className="scope-month-multiselect" id="scope-month-options">
                             <legend>Select months</legend>
                             <div className="scope-month-options">
-                              {MONTHS.filter((item) => item !== month).map((item) => (
+                              {MONTHS.map((item) => (
                                 <label key={item}>
                                   <input
                                     type="checkbox"

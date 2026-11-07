@@ -5,6 +5,7 @@ import Landing from './components/Landing.jsx';
 import ProjectView from './components/ProjectView.jsx';
 import ResetPasswordPage from './components/ResetPasswordPage.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
+import InAppSourceViewer from './components/InAppSourceViewer.jsx';
 
 const STARTUP_SPLASH_DURATION_MS = 4000;
 
@@ -48,6 +49,7 @@ export default function App() {
   return (
     <>
       {!shouldShowStartupSplash && !isWaitingForConfig && <InstallPrompt />}
+      <InAppSourceViewer />
       {screen}
     </>
   );

@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Capacitor } from '@capacitor/core';
 import App from './App.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { ProjectProvider } from './context/ProjectContext.jsx';
@@ -9,7 +10,7 @@ import { CommunityAuthProvider } from './context/CommunityAuthContext.jsx';
 import './styles/themes.css';
 import './styles/global.css';
 
-if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+if ('serviceWorker' in navigator && !import.meta.env.DEV && !Capacitor.isNativePlatform()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((error) => {
       console.error('Brinfolynk offline app support could not be registered:', error);

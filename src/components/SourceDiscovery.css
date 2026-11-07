@@ -456,17 +456,14 @@
   line-height: 1.45;
 }
 
-.ai-relevance-toggle {
-  display: flex !important;
-  align-items: center;
-  gap: 7px;
-  margin-top: 10px !important;
-  color: var(--text-1);
-  font-size: 11px;
+.ai-filter-controls {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
 }
 
-.ai-relevance-toggle input {
-  accent-color: var(--accent);
+.ai-filter-controls p {
+  margin: 0;
 }
 
 .ai-relevance-badge {

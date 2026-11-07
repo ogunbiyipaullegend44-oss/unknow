@@ -8,12 +8,21 @@
     "dev": "node scripts/dev.js",
     "server": "node server/index.js",
     "build": "vite build",
+    "build:native": "node scripts/build-native.js",
+    "native:assets": "capacitor-assets generate --android --ios --iconBackgroundColor \"#111827\" --iconBackgroundColorDark \"#111827\" --splashBackgroundColor \"#111827\" --splashBackgroundColorDark \"#111827\" --logoSplashScale 0.3",
+    "cap:sync": "npm run build:native && cap sync",
+    "cap:android": "cap open android",
+    "cap:ios": "cap open ios",
+    "android:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-release.ps1",
     "preview": "vite preview",
     "test": "node --test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1155.0",
     "@aws-sdk/s3-request-presigner": "^3.1155.0",
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@neon/config": "^1.9.3",
     "@neon/env": "^1.6.4",
     "@neondatabase/functions": "^0.11.0",
@@ -30,6 +39,8 @@
     "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.0",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.5"
   }

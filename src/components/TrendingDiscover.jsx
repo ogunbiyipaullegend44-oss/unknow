@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { apiUrl } from '../utils/apiUrl.js';
 import './TrendingDiscover.css';
 
 function formatViews(value) {
@@ -16,7 +17,7 @@ export default function TrendingDiscover() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/discover/trending', { signal });
+      const response = await fetch(apiUrl('/api/discover/trending'), { signal });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Trending discovery could not be loaded.');
       setTrends(result);

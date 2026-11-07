@@ -29,11 +29,11 @@ test('related-topic request validates question and optional research context', (
 test('AI generates question-specific related topics and preserves the returned topic groups', async () => {
   let providerRequest;
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async (url, options) => {
       providerRequest = { url, body: JSON.parse(options.body) };
       return Response.json({
-        content: [{ type: 'text', text: JSON.stringify({ topics }) }],
+        choices: [{ message: { content: JSON.stringify({ topics }) } }],
       });
     },
   });
@@ -51,10 +51,10 @@ test('AI generates question-specific related topics and preserves the returned t
     const result = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
-    assert.match(providerRequest.body.system, /spontaneous/i);
-    assert.match(providerRequest.body.system, /Do not use a fixed template/i);
-    assert.match(providerRequest.body.messages[0].content, /Nairobi/);
+    assert.equal(providerRequest.url, 'https://api.openai.com/v1/chat/completions');
+    assert.match(providerRequest.body.messages[0].content, /spontaneous/i);
+    assert.match(providerRequest.body.messages[0].content, /Do not use a fixed template/i);
+    assert.match(providerRequest.body.messages[1].content, /Nairobi/);
     assert.deepEqual(result.topics, topics);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -65,16 +65,17 @@ test('related-topic generation rejects duplicate or invalid model topics', async
   await assert.rejects(
     generateAiRelatedTopics({
       question: 'How does air pollution affect urban health?',
-      apiKey: 'test-anthropic-key',
+      apiKey: 'test-openai-key',
       fetchImpl: async () => Response.json({
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
             topics: [
               ...topics.slice(0, 3),
               { ...topics[0], question: 'How do urban zoning choices change neighborhood air quality?' },
             ],
           }),
+          },
         }],
       }),
     }),
@@ -83,7 +84,7 @@ test('related-topic generation rejects duplicate or invalid model topics', async
 });
 
 test('related-topic endpoint reports when AI generation is not configured', async () => {
-  const server = createServer({ anthropicApiKey: '' });
+  const server = createServer({ openaiApiKey: '' });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/research/related-topics`, {

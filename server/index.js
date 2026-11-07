@@ -40,6 +40,10 @@ const PROVIDER_TIMEOUT_MS = 20000;
 const VIDEO_RESULT_LIMIT = 100;
 const VIDEO_PAGE_SIZE = 50;
 const PEERTUBE_INSTANCES = ['peertube.tv', 'framatube.org', 'tilvids.com'];
+const NATIVE_APP_ORIGINS = new Set([
+  'https://localhost',
+  'capacitor://localhost',
+]);
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -1081,14 +1085,27 @@ export function createRequestHandler({
   googleSearchApiKey = process.env.GOOGLE_SEARCH_API_KEY || '',
   googleSearchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID || '',
   youtubeApiKey = process.env.YOUTUBE_API_KEY || '',
-  anthropicApiKey = process.env.ANTHROPIC_API_KEY || '',
-  anthropicModel = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+  openaiApiKey = process.env.OPENAI_API_KEY || '',
+  openaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini',
 } = {}) {
   const requestsByAddress = new Map();
   const aiRequestsByAddress = new Map();
   const trendingCache = { value: null, expiresAt: 0, pending: null };
 
   return async (request, response) => {
+    const origin = request.headers?.origin;
+    if (NATIVE_APP_ORIGINS.has(origin)) {
+      response.setHeader('Access-Control-Allow-Origin', origin);
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      response.setHeader('Vary', 'Origin');
+    }
+    if (request.method === 'OPTIONS' && NATIVE_APP_ORIGINS.has(origin)) {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
     const url = new URL(request.url, 'http://localhost');
 
     if (url.pathname === '/api/health' && request.method === 'GET') {
@@ -1105,8 +1122,8 @@ export function createRequestHandler({
           google: Boolean(googleSearchApiKey && googleSearchEngineId),
         },
         aiProviders: {
-          anthropic: Boolean(anthropicApiKey),
-          model: anthropicModel,
+          openai: Boolean(openaiApiKey),
+          openaiModel,
         },
       });
       return;
@@ -1159,8 +1176,8 @@ export function createRequestHandler({
         const overview = await generateAiTopicOverview({
           question: body.question.trim(),
           sources: body.sources,
-          apiKey: anthropicApiKey,
-          model: anthropicModel,
+          apiKey: openaiApiKey,
+          model: openaiModel,
           fetchImpl,
         });
         sendJson(response, 200, overview);
@@ -1199,8 +1216,8 @@ export function createRequestHandler({
           question: body.question.trim(),
           region: body.region?.trim() ?? '',
           areas: body.areas ?? [],
-          apiKey: anthropicApiKey,
-          model: anthropicModel,
+          apiKey: openaiApiKey,
+          model: openaiModel,
           fetchImpl,
         });
         sendJson(response, 200, result);
@@ -1238,11 +1255,11 @@ export function createRequestHandler({
         const evaluations = await assessSourceRelevance({
           question: body.question.trim(),
           sources: body.sources,
-          apiKey: anthropicApiKey,
-          model: anthropicModel,
+          apiKey: openaiApiKey,
+          model: openaiModel,
           fetchImpl,
         });
-        sendJson(response, 200, { evaluations, model: anthropicModel });
+        sendJson(response, 200, { evaluations, model: openaiModel });
       } catch (error) {
         sendJson(response, error.status || 502, {
           error: error.message || 'AI relevance assessment could not be completed.',

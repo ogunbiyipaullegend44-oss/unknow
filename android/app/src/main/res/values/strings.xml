@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Brinfolynk</string>
+    <string name="title_activity_main">Brinfolynk</string>
+    <string name="package_name">com.brinfolynk.app</string>
+    <string name="custom_url_scheme">com.brinfolynk.app</string>
+</resources>

@@ -40,12 +40,48 @@ test('Vercel-compatible handler accepts a parsed JSON request body', async () =>
   assert.match(JSON.parse(response.body).error, /8 characters/);
 });
 
-test('AI relevance route validates records and does not call Anthropic without a server key', async (t) => {
+test('native app origins can complete API preflight requests', async (t) => {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const endpoint = `http://127.0.0.1:${server.address().port}/api/research`;
+
+  const response = await fetch(endpoint, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://localhost',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'content-type',
+    },
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), 'https://localhost');
+  assert.match(response.headers.get('access-control-allow-methods'), /POST/);
+});
+
+test('untrusted origins do not receive native app CORS permission', async (t) => {
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const endpoint = `http://127.0.0.1:${server.address().port}/api/health`;
+
+  const response = await fetch(endpoint, {
+    headers: { Origin: 'https://untrusted.example' },
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
+});
+
+test('AI relevance route validates records and never falls back to Anthropic without an OpenAI key', async (t) => {
   let providerCalls = 0;
   const server = createServer({
+    openaiApiKey: '',
+    anthropicApiKey: 'test-anthropic-key',
     fetchImpl: async () => {
       providerCalls += 1;
-      assert.fail('Anthropic should not be called without a configured key');
+      assert.fail('OpenAI should not be called without a configured key');
     },
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -68,20 +104,20 @@ test('AI relevance route validates records and does not call Anthropic without a
     }),
   });
   assert.equal(unconfiguredResponse.status, 503);
-  assert.match((await unconfiguredResponse.json()).error, /ANTHROPIC_API_KEY/);
+  assert.match((await unconfiguredResponse.json()).error, /OPENAI_API_KEY/);
   assert.equal(providerCalls, 0);
 });
 
 test('AI relevance route uses the server key and only returns source-grounded excerpts', async (t) => {
   let providerRequest;
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async (url, options) => {
       providerRequest = { url, options, body: JSON.parse(options.body) };
       return Response.json({
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
+        choices: [{
+          message: {
+            content: JSON.stringify({
             evaluations: [
               {
                 id: 'source-1',
@@ -91,6 +127,7 @@ test('AI relevance route uses the server key and only returns source-grounded ex
               },
             ],
           }),
+          },
         }],
       });
     },
@@ -109,11 +146,12 @@ test('AI relevance route uses the server key and only returns source-grounded ex
   const result = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
-  assert.equal(providerRequest.options.headers['x-api-key'], 'test-anthropic-key');
-  assert.equal(providerRequest.body.model, 'claude-haiku-5-5');
-  assert.equal(providerRequest.body.messages[0].content.includes('source-1'), true);
-  assert.equal(JSON.stringify(result).includes('test-anthropic-key'), false);
+  assert.equal(providerRequest.url, 'https://api.openai.com/v1/chat/completions');
+  assert.equal(providerRequest.options.headers.authorization, 'Bearer test-openai-key');
+  assert.equal(providerRequest.body.model, 'gpt-4o-mini');
+  assert.deepEqual(providerRequest.body.response_format, { type: 'json_object' });
+  assert.equal(providerRequest.body.messages[1].content.includes('source-1'), true);
+  assert.equal(JSON.stringify(result).includes('test-openai-key'), false);
   assert.deepEqual(result.evaluations, [{
     id: 'source-1',
     score: 91,
@@ -124,11 +162,11 @@ test('AI relevance route uses the server key and only returns source-grounded ex
 
 test('AI relevance route discards model-generated excerpts not found in source text', async (t) => {
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async () => Response.json({
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
+      choices: [{
+        message: {
+          content: JSON.stringify({
           evaluations: [{
             id: 'source-1',
             score: 90,
@@ -136,6 +174,7 @@ test('AI relevance route discards model-generated excerpts not found in source t
             context: 'This statement is not in the submitted text.',
           }],
         }),
+        },
       }],
     }),
   });
@@ -163,17 +202,18 @@ test('AI relevance route discards model-generated excerpts not found in source t
 test('AI topic overview defines the subject and only links returned source ids to current developments', async (t) => {
   let providerRequest;
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async (url, options) => {
       providerRequest = { url, body: JSON.parse(options.body) };
       return Response.json({
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            definition: 'An election is a formal process for selecting public officials by voting.',
-            currentSummary: 'The electoral commission has announced the voting schedule.',
-            sourceIds: ['source-1', 'not-submitted'],
-          }),
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              definition: 'An election is a formal process for selecting public officials by voting.',
+              currentSummary: 'The electoral commission has announced the voting schedule.',
+              sourceIds: ['source-1', 'not-submitted'],
+            }),
+          },
         }],
       });
     },
@@ -197,21 +237,21 @@ test('AI topic overview defines the subject and only links returned source ids t
   const result = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(providerRequest.url, 'https://api.anthropic.com/v1/messages');
-  assert.match(providerRequest.body.system, /explain in plain language what the topic itself means/i);
-  assert.match(providerRequest.body.messages[0].content, /voting schedule/);
+  assert.equal(providerRequest.url, 'https://api.openai.com/v1/chat/completions');
+  assert.match(providerRequest.body.messages[0].content, /explain in plain language what the topic itself means/i);
+  assert.match(providerRequest.body.messages[1].content, /voting schedule/);
   assert.deepEqual(result, {
     definition: 'An election is a formal process for selecting public officials by voting.',
     currentSummary: 'The electoral commission has announced the voting schedule.',
     sourceIds: ['source-1'],
-    model: 'claude-haiku-5-5',
+    model: 'gpt-4o-mini',
   });
 });
 
-test('AI topic overview rejects an empty source list without calling Anthropic', async (t) => {
+test('AI topic overview rejects an empty source list without calling OpenAI', async (t) => {
   let providerCalls = 0;
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async () => {
       providerCalls += 1;
       throw new Error('The provider should not be called for an empty source list.');
@@ -237,13 +277,9 @@ test('AI topic overview rejects an empty source list without calling Anthropic',
 
 test('AI topic overview includes a bounded provider error message for diagnosis', async (t) => {
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-key',
+    openaiApiKey: 'test-openai-key',
     fetchImpl: async () => Response.json({
-      type: 'error',
-      error: {
-        type: 'invalid_request_error',
-        message: 'The requested test model is not available.',
-      },
+      error: { message: 'The requested test model is not available.' },
     }, { status: 400 }),
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -1303,8 +1339,8 @@ test('Google Search configuration is reported and Google errors reach the user a
 
   assert.equal(health.webProviders.google, true);
   assert.deepEqual(health.aiProviders, {
-    anthropic: false,
-    model: 'claude-haiku-5-5',
+    openai: false,
+    openaiModel: 'gpt-4o-mini',
   });
   assert.equal(response.status, 200);
   assert.equal(body.webSources.length, 0);
@@ -1315,8 +1351,8 @@ test('Google Search configuration is reported and Google errors reach the user a
 
 test('API health reports AI availability without exposing configured credentials', async (t) => {
   const server = createServer({
-    anthropicApiKey: 'test-anthropic-secret',
-    anthropicModel: 'test-model',
+    openaiApiKey: 'test-openai-secret',
+    openaiModel: 'test-openai-model',
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -1324,9 +1360,9 @@ test('API health reports AI availability without exposing configured credentials
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
   const body = await response.json();
 
-  assert.equal(body.aiProviders.anthropic, true);
-  assert.equal(body.aiProviders.model, 'test-model');
-  assert.equal(JSON.stringify(body).includes('test-anthropic-secret'), false);
+  assert.equal(body.aiProviders.openai, true);
+  assert.equal(body.aiProviders.openaiModel, 'test-openai-model');
+  assert.equal(JSON.stringify(body).includes('test-openai-secret'), false);
 });
 
 test('Google Search warns when API key and search engine ID are not both configured', async (t) => {

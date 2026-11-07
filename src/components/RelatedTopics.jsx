@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl } from '../utils/apiUrl.js';
 import { sourceDateLabel } from './sourceCategories.js';
 import { groupRelatedSources, normalizeRelatedSources, relatedSourceLimit } from './relatedTopicSources.js';
 import './RelatedTopics.css';
@@ -20,7 +21,7 @@ async function readResponse(response, fallbackMessage) {
 
 async function findSourcesForTopic(research, topic) {
   const scope = research.scope ?? {};
-  const response = await fetch('/api/research', {
+  const response = await fetch(apiUrl('/api/research'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -66,7 +67,7 @@ function loadRelatedTopics(research, force = false) {
   const key = researchCacheKey(research);
   if (force) topicRequestCache.delete(key);
   return rememberRequest(topicRequestCache, key, async () => {
-    const response = await fetch('/api/research/related-topics', {
+    const response = await fetch(apiUrl('/api/research/related-topics'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

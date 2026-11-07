@@ -31,6 +31,7 @@ import {
   SOURCE_REVIEWS_KEY,
   updateSourceReview,
 } from './sourceReview.js';
+import { apiUrl } from '../utils/apiUrl.js';
 import './SourceDiscovery.css';
 
 const MAX_COMPARE_SOURCES = 5;
@@ -230,6 +231,7 @@ export default function SourceDiscovery({
   const filterDrawerRef = useRef(null);
   const sourceSearchInputRef = useRef(null);
   const sourceSearchPanelRef = useRef(null);
+  const aiRequestController = useRef(null);
   const previousResearch = useRef(research);
 
   useEffect(() => {
@@ -333,7 +335,7 @@ export default function SourceDiscovery({
     setTopicOverviewLoading(true);
 
     const sourcesById = new Map(overviewSources.map((source) => [source.id, source]));
-    fetch('/api/research/topic-overview', {
+    fetch(apiUrl('/api/research/topic-overview'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -382,24 +384,11 @@ export default function SourceDiscovery({
     () => ({ researchAreas: research.analysis.researchAreas }),
     [research.analysis.researchAreas],
   );
-  const compiledFilters = useMemo(
-    () => compileSourceFilters(deferredFilters, filterContext),
-    [deferredFilters, filterContext],
-  );
   const availableItems = useMemo(() => {
-    const relevanceQuestion = deferredFilters.relevanceQuestion.trim() || research.question;
     const useAiQuestion = aiFilterActive &&
-      aiAssessmentQuestion === relevanceQuestion;
-    const assessmentMatchesQuestion = aiAssessmentQuestion === relevanceQuestion &&
-      Object.keys(aiScores).length > 0;
-    const noStrongAiMatches = assessmentMatchesQuestion &&
-      !Object.values(aiScores).some(({ score }) => score >= MIN_AI_RELEVANCE_SCORE);
-    const filtersToApply = useAiQuestion || noStrongAiMatches || !deferredFilters.relevanceQuestion.trim()
-      ? { ...deferredFilters, relevanceQuestion: '' }
-      : deferredFilters;
-    const compiled = useAiQuestion || noStrongAiMatches
-      ? compileSourceFilters(filtersToApply, filterContext)
-      : compiledFilters;
+      aiAssessmentQuestion === research.question;
+    const filtersToApply = { ...deferredFilters, relevanceQuestion: '' };
+    const compiled = compileSourceFilters(filtersToApply, filterContext);
     const matches = classifiedItems
       .filter((item) => !excludedIds.has(item.id))
       .filter((item) => matchesSourceFilters(item, filtersToApply, filterContext, compiled));
@@ -420,22 +409,17 @@ export default function SourceDiscovery({
     deferredFilters,
     excludedIds,
     filterContext,
-    compiledFilters,
     research.question,
   ]);
+  const displayedItems = availableItems;
   const aiCandidates = useMemo(() => {
-    const filtersWithoutKeywordRelevance = { ...deferredFilters, relevanceQuestion: '' };
-    const compiledWithoutKeywordRelevance = compileSourceFilters(
-      filtersWithoutKeywordRelevance,
-      filterContext,
-    );
     return sortSources(classifiedItems
       .filter((item) => !excludedIds.has(item.id))
       .filter((item) => matchesSourceFilters(
         item,
-        filtersWithoutKeywordRelevance,
+        deferredFilters,
         filterContext,
-        compiledWithoutKeywordRelevance,
+        compileSourceFilters(deferredFilters, filterContext),
       )), deferredFilters.sort)
       .slice(0, MAX_AI_ASSESSMENT_SOURCES);
   }, [classifiedItems, deferredFilters, excludedIds, filterContext]);
@@ -460,14 +444,14 @@ export default function SourceDiscovery({
   );
   const categories = useMemo(() => {
     const groups = new Map();
-    for (const item of availableItems) {
+    for (const item of displayedItems) {
       if (!groups.has(item.category)) groups.set(item.category, []);
       groups.get(item.category).push(item);
     }
     return SOURCE_CATEGORIES
       .filter((category) => groups.has(category))
       .map((category) => [category, groups.get(category)]);
-  }, [availableItems]);
+  }, [displayedItems]);
   const comparedItems = items.filter((item) => comparedIds.has(item.id));
   const comparisonDifferences = comparabilityDifferences(comparedItems);
 
@@ -500,11 +484,14 @@ export default function SourceDiscovery({
     setExcludedIds(new Set());
     setComparedIds(new Set());
     setCategoryPages({});
+    aiRequestController.current?.abort();
+    aiRequestController.current = null;
+    setAiBusy(false);
     setAiScores({});
     setAiAssessmentQuestion('');
     setAiFilterActive(false);
     setAiError('');
-  }, [research.retrievedAt]);
+  }, [research.id, research.retrievedAt]);
 
   useEffect(() => {
     setFilters({
@@ -542,7 +529,7 @@ export default function SourceDiscovery({
   };
 
   const assessRelevanceWithAi = async () => {
-    const question = filters.relevanceQuestion.trim() || research.question;
+    const question = research.question;
     if (question.length < 8) {
       setAiError('Enter a topic or question with at least 8 characters before assessing relevance.');
       return;
@@ -552,6 +539,9 @@ export default function SourceDiscovery({
       return;
     }
 
+    aiRequestController.current?.abort();
+    const controller = new AbortController();
+    aiRequestController.current = controller;
     setAiBusy(true);
     setAiError('');
     setAiFilterActive(false);
@@ -561,7 +551,7 @@ export default function SourceDiscovery({
       const assessments = {};
       for (let offset = 0; offset < aiCandidates.length; offset += AI_REQUEST_BATCH_SIZE) {
         const batch = aiCandidates.slice(offset, offset + AI_REQUEST_BATCH_SIZE);
-        const response = await fetch('/api/research/ai-relevance', {
+        const response = await fetch(apiUrl('/api/research/ai-relevance'), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -579,6 +569,7 @@ export default function SourceDiscovery({
                 .slice(0, 2500),
             })),
           }),
+          signal: controller.signal,
         });
         let result;
         try {
@@ -612,27 +603,45 @@ export default function SourceDiscovery({
       setAiScores(assessments);
       const strongMatches = Object.values(assessments)
         .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length;
-      setAiFilterActive(strongMatches > 0);
+      setAiFilterActive(true);
       setNotice(strongMatches
         ? `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}”; ${strongMatches} met the strong contextual-match threshold. Scores indicate topical relevance, not factual accuracy or source quality.`
-        : `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}” but found no strong contextual matches. All retrieved sources remain available for manual review.`);
+        : `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}” but found no strong contextual matches. The AI filter is active; use “Show all retrieved sources” to review unfiltered results.`);
     } catch (error) {
+      if (error.name === 'AbortError') return;
       setAiScores({});
       setAiError(error.message || 'AI relevance assessment could not be completed.');
     } finally {
-      setAiBusy(false);
+      if (aiRequestController.current === controller) {
+        aiRequestController.current = null;
+        setAiBusy(false);
+      }
     }
   };
 
   const autoAiResearchKey = useRef('');
   useEffect(() => {
-    if (!aiCandidates.length ||
-      (filters.relevanceQuestion.trim() && filters.relevanceQuestion !== research.question)) return;
-    const researchKey = `${research.id}:${research.retrievedAt}`;
+    if (!aiCandidates.length) return;
+    const researchKey = JSON.stringify([
+      research.id,
+      research.retrievedAt,
+      research.question,
+      aiCandidateSignature,
+    ]);
     if (autoAiResearchKey.current === researchKey) return;
     autoAiResearchKey.current = researchKey;
     assessRelevanceWithAi();
-  }, [aiCandidateSignature, filters.relevanceQuestion, research.id, research.question, research.retrievedAt]);
+    return () => {
+      if (aiRequestController.current) {
+        aiRequestController.current.abort();
+        aiRequestController.current = null;
+        setAiBusy(false);
+        if (autoAiResearchKey.current === researchKey) {
+          autoAiResearchKey.current = '';
+        }
+      }
+    };
+  }, [aiCandidateSignature, research.id, research.question, research.retrievedAt]);
 
   const availableCategories = [...new Set(classifiedItems.map((item) => item.category))];
   const availableOrganizations = [...new Set(classifiedItems.flatMap((item) => item.organizationTypes))];
@@ -645,6 +654,38 @@ export default function SourceDiscovery({
   ).length;
   return (
     <div className="discovery-workspace">
+      <p className="ai-relevance-disclosure">
+        ChatGPT (OpenAI) automatically compares your research question with retrieved source text to filter contextual matches. The question and up to {MAX_AI_ASSESSMENT_SOURCES} source titles/text excerpts are sent to OpenAI’s API; API usage may incur charges. This estimates relevance, not factual accuracy or source quality. If AI is unavailable, retrieved sources remain visible.
+      </p>
+      {aiBusy && <p className="filter-limitation" role="status">Checking source context with AI…</p>}
+      {aiError && (
+        <div className="topic-overview-error" role="alert">
+          <p className="discovery-warning">
+            ChatGPT contextual filtering is unavailable: {aiError}
+            {aiError.includes('OPENAI_API_KEY') && (
+              <> For local development, add <code>OPENAI_API_KEY</code> to the project-root <code>.env.local</code> and restart <code>npm run dev</code>.</>
+            )}
+          </p>
+          <button type="button" className="btn btn-secondary" onClick={assessRelevanceWithAi}>
+            Retry ChatGPT filter
+          </button>
+        </div>
+      )}
+      {Object.keys(aiScores).length > 0 && (
+        <div className="ai-filter-controls">
+          <p className="filter-limitation" role="status">
+            ChatGPT contextual filter {aiFilterActive ? 'is active' : 'is off'}; {Object.values(aiScores)
+              .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length} strong matches found.
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setAiFilterActive((active) => !active)}
+          >
+            {aiFilterActive ? 'Show all retrieved sources' : 'Apply contextual filter'}
+          </button>
+        </div>
+      )}
       <section className="source-result-overview" aria-labelledby="source-result-overview-title" aria-live="polite">
         <h3 id="source-result-overview-title">Topic overview</h3>
         {topicOverviewLoading && <p role="status">Generating a topic definition and checking the retrieved sources for current developments…</p>}
@@ -652,7 +693,7 @@ export default function SourceDiscovery({
           <div className="topic-overview-error" role="alert">
             <p>Topic overview could not be generated: {topicOverviewError}</p>
             <p className="filter-limitation">
-              Local development requires <code>ANTHROPIC_API_KEY</code> in the project-root <code>.env.local</code>; restart <code>npm run dev</code> after adding it. Hosted use requires the API routes and key in the Vercel deployment.
+              Local development requires <code>OPENAI_API_KEY</code> in the project-root <code>.env.local</code>; restart <code>npm run dev</code> after adding it. Hosted use requires the API routes and key in the Vercel deployment.
             </p>
             <button className="btn btn-secondary" type="button" onClick={() => setTopicOverviewRetry((retry) => retry + 1)}>
               Retry topic overview
@@ -847,50 +888,6 @@ export default function SourceDiscovery({
                 <span>Specific claim text</span>
                 <input value={filters.claim} onChange={(event) => setFilters((current) => ({ ...current, claim: event.target.value }))} placeholder="Match this exact wording in retrieved text" />
               </label>
-              <label className="filter-inline-label">
-                <span>Optional question-context filter</span>
-                <input value={filters.relevanceQuestion} onChange={(event) => {
-                  setFilters((current) => ({ ...current, relevanceQuestion: event.target.value }));
-                  setAiScores({});
-                  setAiAssessmentQuestion('');
-                  setAiFilterActive(false);
-                  setAiError('');
-                }} placeholder="Optional: match this topic in retrieved source text" />
-              </label>
-            </fieldset>
-
-            <fieldset className="filter-section">
-              <legend>AI topical match</legend>
-              <p className="ai-relevance-disclosure">
-                AI automatically assesses up to {MAX_AI_ASSESSMENT_SOURCES} retrieved sources for every research topic. It compares the question with source text in context; a title or keyword match alone is not enough. The question and source titles/text are sent to Anthropic; API usage may incur charges. Scores estimate topical relevance, not factual accuracy or source credibility. The optional question-context filter above is an additional filter; leave it blank to keep results visible if AI is unavailable.
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={aiBusy || aiCandidates.length === 0}
-                onClick={assessRelevanceWithAi}
-              >
-                {aiBusy ? 'Assessing sources with AI…' : aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question) && Object.keys(aiScores).length
-                  ? `Reassess ${aiCandidates.length} sources with AI`
-                  : `Assess up to ${aiCandidates.length} sources with AI`}
-              </button>
-              {aiScores && Object.keys(aiScores).length > 0 && (
-                <label className="filter-inline-label ai-relevance-toggle">
-                  <input
-                    type="checkbox"
-                    checked={aiFilterActive && aiAssessmentQuestion === (filters.relevanceQuestion.trim() || research.question)}
-                    onChange={(event) => setAiFilterActive(event.target.checked)}
-                  />
-                  <span>Show strong AI matches only ({MIN_AI_RELEVANCE_SCORE}+ / 100)</span>
-                </label>
-              )}
-              {aiBusy && <p className="filter-limitation" role="status">Assessing up to {aiCandidates.length} sources. Each source uses only retrieved titles and text.</p>}
-              {aiError && <p className="discovery-warning" role="alert">{aiError}</p>}
-              {aiError && (
-                <p className="filter-limitation">
-                  Vercel environment variables are not available to local development. For local AI, add <code>ANTHROPIC_API_KEY</code> to the project-root <code>.env.local</code> and restart <code>npm run dev</code>.
-                </p>
-              )}
             </fieldset>
 
             <fieldset className="filter-section">
@@ -917,7 +914,7 @@ export default function SourceDiscovery({
             </div>
           )}
           <p className="filter-result-count" aria-live="polite">
-            {availableItems.length} of {items.length} sources match your filters
+            {displayedItems.length} of {items.length} sources match your filters
             {excludedIds.size > 0 ? ` · ${excludedIds.size} excluded from this view` : ''}
           </p>
         </div>
@@ -994,9 +991,15 @@ export default function SourceDiscovery({
 
       {categories.length === 0 ? (
         <div className="source-empty">
-          <h3>{items.length ? 'No sources match this filter' : 'No source records were discovered'}</h3>
+          <h3>{items.length
+            ? aiFilterActive && aiAssessmentQuestion === research.question && Object.keys(aiScores).length
+              ? 'No strong contextual matches found'
+              : 'No sources match this filter'
+            : 'No source records were discovered'}</h3>
           <p>{items.length
-            ? 'Remove an active filter or select Clear All to see more retrieved results.'
+            ? aiFilterActive && aiAssessmentQuestion === research.question && Object.keys(aiScores).length
+              ? 'OpenAI completed the contextual assessment, but none of the retrieved records met the relevance threshold.'
+              : 'Remove an active filter or select Clear All to see more retrieved results.'
             : 'No connected provider returned source records for this search. Review the provider notices above, configure optional search keys, or try broader terms. No empty categories are being presented as results.'}</p>
         </div>
       ) : categories.map(([category, categoryItems]) => {
@@ -1089,8 +1092,24 @@ export default function SourceDiscovery({
                   </section>
                 </details>
                 <div className="discovery-actions">
-                  <a className="btn btn-primary" href={item.url} target="_blank" rel="noopener noreferrer">Open Original Source</a>
-                  {item.openAccessUrl && <a className="btn btn-secondary" href={item.openAccessUrl} target="_blank" rel="noopener noreferrer">Open full-text link</a>}
+                  <a
+                    className="btn btn-primary"
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open Original Source
+                  </a>
+                  {item.openAccessUrl && (
+                    <a
+                      className="btn btn-secondary"
+                      href={item.openAccessUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open full-text link
+                    </a>
+                  )}
                   <button type="button" className="btn btn-secondary" onClick={() => {
                     setProjectDialogItem(item);
                     setSelectedProjectId(savedProjects[0]?.id ?? '');

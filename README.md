@@ -78,6 +78,67 @@ The production site can be installed as a Progressive Web App (PWA). It must be 
 
 The app shell, entry scripts/styles, and built assets are cached so the app can open while offline. Research searches, Neon sign-in and cloud features, and external map/source services still require an internet connection. Development mode does not register the service worker; use `npm run build` followed by `npm run preview` to test installation locally.
 
+### Build native Android and iOS apps
+
+The Capacitor projects package the built Brinfolynk interface inside native Android and iOS applications. The app opens from its installed native icon and does not need a browser shortcut. The bundled interface and research history saved on that device remain available offline; new research, AI, account/cloud sync, and online maps still need a connection.
+
+Install dependencies and generate branded native icons/splash screens:
+
+```bash
+npm install
+npm run native:assets
+```
+
+Build the bundled app and sync it into the native projects:
+
+```bash
+npm run cap:sync
+```
+
+For Android, install Android Studio and its Android SDK, then open the project with `npm run cap:android`. Android Studio can run it on a device or emulator and create a signed APK for direct installation or a Play Store bundle.
+
+For iPhone/iPad, use a Mac with Xcode installed and run `npm run cap:ios`. Xcode is required to build, sign, run, or archive the iOS app; distribute through TestFlight or the App Store using an Apple Developer account.
+
+The native build calls the deployed research API at `https://unknow-dun.vercel.app` by default. To use a different HTTPS API host, set `NATIVE_API_BASE_URL` before running `npm run cap:sync`. Server CORS permits only the Capacitor Android (`https://localhost`) and iOS (`capacitor://localhost`) origins. Native projects use the `com.brinfolynk.app` app identifier; change it before publishing if a different reverse-domain identifier is required.
+
+#### Signed Android APK and Google Play AAB
+
+Install Android Studio and, in **Tools → SDK Manager**, install Android SDK Platform 36 and Android SDK Build-Tools 36.0.0. This project's Gradle build requires Java 17–24; Microsoft OpenJDK 21 is recommended if Android Studio's bundled Java is newer. Accept the SDK licenses when prompted.
+
+After Android Studio and the SDK are installed, generate a release keystore outside the repository. The script creates a random signing key and protects its password with Windows DPAPI for your current Windows account:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-android-keystore.ps1
+```
+
+Then build both signed release formats:
+
+```powershell
+npm run cap:sync
+npm run android:release
+```
+
+The script requires all signing values and fails rather than silently making an unsigned release. It builds:
+
+- `android/app/build/outputs/apk/release/app-release.apk` — signed package for direct Android installation.
+- `android/app/build/outputs/bundle/release/app-release.aab` — signed bundle for Google Play Console.
+
+The keystore is stored under `%USERPROFILE%\Brinfolynk\signing`, outside the repository, and ignored by Git. The password file is encrypted so it can only be decrypted by the same Windows account on this computer. Back up the `.p12` keystore and its protected credentials together in a secure place; losing the original signing identity prevents publishing app updates under the same identity. Never share or commit the keystore or its passwords.
+
+#### Signed iOS IPA with GitHub Actions
+
+iOS signing requires an Apple Developer account. In the Apple Developer portal, register the `com.brinfolynk.app` App ID, create an **Apple Distribution** certificate and export its private key as a password-protected `.p12`, and create an **App Store Connect** provisioning profile for that app ID. Add these repository **Actions secrets** under **Settings → Secrets and variables → Actions**:
+
+- `IOS_DISTRIBUTION_CERTIFICATE_BASE64` — base64-encoded `.p12` file contents.
+- `IOS_DISTRIBUTION_CERTIFICATE_PASSWORD` — the `.p12` export password.
+- `IOS_APP_STORE_PROFILE_BASE64` — base64-encoded App Store Connect `.mobileprovision` file contents.
+- `IOS_AD_HOC_PROFILE_BASE64` — base64-encoded Ad Hoc `.mobileprovision` file contents (with the intended device UDIDs registered).
+- `IOS_TEAM_ID` — the Apple Developer Team ID.
+
+Keep the certificate and profile private. On macOS, base64-encode each file locally (`base64 -i distribution.p12 | pbcopy` and `base64 -i profile.mobileprovision | pbcopy`) and paste the contents directly into the corresponding GitHub secret; do not put them in the repository or chat.
+
+After adding the secrets, run **Actions → iOS signed release → Run workflow** and choose **app-store-connect** for TestFlight/App Store or **ad-hoc** for direct installation on registered iPhones/iPads. The matching profile secret must be configured for the chosen export. GitHub attaches a signed IPA artifact named for the selected export type. App Store Connect/TestFlight still requires uploading the IPA and completing Apple's distribution steps; the workflow does not install or upload the app automatically.
+
 ### Deploying to Vercel
 
 Import the repository in Vercel with the project root set to `/` and the **Vite** preset. Use `npm run build` as the build command and `dist` as the output directory. The `api/[...path].js` serverless function hosts the research API on the same domain, so `/api/research`, `/api/research/continue`, `/api/research/topic-overview`, `/api/research/ai-relevance`, `/api/discover/trending`, and `/api/health` work without a separate API host.
@@ -88,7 +149,7 @@ Vercel environment-variable changes only apply to deployments created after the 
 
 If visitors should be able to use the deployed site without signing in to Vercel, check **Settings → Deployment Protection** and disable protection for the production deployment.
 
-Optional `OPENALEX_MAILTO` and `CROSSREF_MAILTO` environment variables can provide a contact email to the public catalogs. `SEMANTIC_SCHOLAR_API_KEY`, `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_ENGINE_ID`, `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `YOUTUBE_API_KEY`, and `ANTHROPIC_API_KEY` are optional server-side credentials. For local development, put provider variables in the git-ignored `.env.local` file; `npm run dev` loads it into both the frontend development server and the research API. Vercel environment variables do not automatically appear in local development. AI source relevance automatically assesses up to 50 retrieved source titles/text excerpts against the research question in batches; if assessment fails or is unavailable, retrieved sources remain visible unless the user applies the optional question-context filter. Anthropic API usage may incur charges; Claude's consumer chat plan is not an API key, and free API credits are not guaranteed. Set `ANTHROPIC_MODEL` to change the default `claude-haiku-5-5` model. AI scores estimate topical relevance only, do not verify source quality or claims, and show a source excerpt only when the returned quote exactly matches retrieved text. In Vercel, configure keys as server-side environment variables—never use a `VITE_` prefix—and redeploy the API code that provides the AI routes. The `/api/health` response indicates whether each optional provider is configured without returning credentials. For Google web results, create a Programmable Search Engine, enable the Custom Search JSON API in Google Cloud, and configure both the API key and search engine ID. Create keys in the respective Tavily and Brave Search dashboards to enable their web results. To enable YouTube, create a Google Cloud API key and enable **YouTube Data API v3** for its project. Configure credentials in your server environment or hosting provider's secret settings. For PowerShell, set them in the terminal before starting the server:
+Optional `OPENALEX_MAILTO` and `CROSSREF_MAILTO` environment variables can provide a contact email to the public catalogs. `SEMANTIC_SCHOLAR_API_KEY`, `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_ENGINE_ID`, `TAVILY_API_KEY`, `BRAVE_SEARCH_API_KEY`, `YOUTUBE_API_KEY`, and `OPENAI_API_KEY` are optional server-side credentials. For local development, put provider variables in the git-ignored `.env.local` file; `npm run dev` loads it into both the frontend development server and the research API. Vercel environment variables do not automatically appear in local development. Source relevance automatically sends the research question and up to 50 retrieved source titles/text excerpts to OpenAI in the background and applies the filter to show strong contextual matches; if none qualify, use **Show all retrieved sources** to inspect them. OpenAI also generates topic overviews and related research topics. OpenAI API usage may incur charges; a ChatGPT consumer subscription is not an API key, and API credits are not guaranteed. Set `OPENAI_MODEL` to change the default `gpt-4o-mini` model. AI scores estimate topical relevance only, do not verify source quality or claims, and show an excerpt only when the returned quote exactly matches retrieved text. If assessment fails or is unavailable, retrieved sources remain visible. Anthropic integration is disabled. In Vercel, add `OPENAI_API_KEY` under **Settings → Environment Variables** as a server-side variable (never use a `VITE_` prefix), then redeploy. The `/api/health` response indicates whether each optional provider is configured without returning credentials. For Google web results, create a Programmable Search Engine, enable the Custom Search JSON API in Google Cloud, and configure both the API key and search engine ID. Create keys in the respective Tavily and Brave Search dashboards to enable their web results. To enable YouTube, create a Google Cloud API key and enable **YouTube Data API v3** for its project. Configure credentials in your server environment or hosting provider's secret settings. For PowerShell, set them in the terminal before starting the server:
 
 ```powershell
 $env:TAVILY_API_KEY = "your-tavily-key"
@@ -96,7 +157,7 @@ $env:BRAVE_SEARCH_API_KEY = "your-brave-search-key"
 $env:GOOGLE_SEARCH_API_KEY = "your-google-search-api-key"
 $env:GOOGLE_SEARCH_ENGINE_ID = "your-programmable-search-engine-id"
 $env:YOUTUBE_API_KEY = "your-server-side-key"
-$env:ANTHROPIC_API_KEY = "your-anthropic-api-key"
+$env:OPENAI_API_KEY = "your-openai-api-key"
 npm run server
 ```
 
