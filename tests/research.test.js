@@ -74,11 +74,10 @@ test('untrusted origins do not receive native app CORS permission', async (t) =>
   assert.equal(response.headers.get('access-control-allow-origin'), null);
 });
 
-test('AI relevance route validates records and never falls back to Anthropic without an OpenAI key', async (t) => {
+test('AI relevance route validates records and only uses OpenAI when configured', async (t) => {
   let providerCalls = 0;
   const server = createServer({
     openaiApiKey: '',
-    anthropicApiKey: 'test-anthropic-key',
     fetchImpl: async () => {
       providerCalls += 1;
       assert.fail('OpenAI should not be called without a configured key');
@@ -87,6 +86,11 @@ test('AI relevance route validates records and never falls back to Anthropic wit
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const endpoint = `http://127.0.0.1:${server.address().port}/api/research/ai-relevance`;
+
+  const healthResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+  const health = await healthResponse.json();
+  assert.equal(health.aiProviders.openai, false);
+  assert.equal(Object.hasOwn(health.aiProviders, 'anthropic'), false);
 
   const invalidResponse = await fetch(endpoint, {
     method: 'POST',

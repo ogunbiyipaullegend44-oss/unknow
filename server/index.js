@@ -36,6 +36,7 @@ const DIST = join(ROOT, 'dist');
 const MAX_BODY_BYTES = 1024 * 1024;
 const RATE_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT = 30;
+const AI_RATE_LIMIT = 60;
 const PROVIDER_TIMEOUT_MS = 20000;
 const VIDEO_RESULT_LIMIT = 100;
 const VIDEO_PAGE_SIZE = 50;
@@ -1159,9 +1160,9 @@ export function createRequestHandler({
       }
       const limit = aiRequestsByAddress.get(address);
       limit.count += 1;
-      if (limit.count > 10) {
+      if (limit.count > AI_RATE_LIMIT) {
         sendJson(response, 429, {
-          error: 'Too many AI requests were sent from this device. Please wait 15 minutes and try again.',
+          error: `Too many AI requests were sent from this device. The limit is ${AI_RATE_LIMIT} requests per 15 minutes; please wait and try again.`,
         });
         return;
       }
@@ -1198,9 +1199,9 @@ export function createRequestHandler({
       }
       const limit = aiRequestsByAddress.get(address);
       limit.count += 1;
-      if (limit.count > 10) {
+      if (limit.count > AI_RATE_LIMIT) {
         sendJson(response, 429, {
-          error: 'Too many AI related-topic requests were sent from this device. Please wait 15 minutes and try again.',
+          error: `Too many AI related-topic requests were sent from this device. The limit is ${AI_RATE_LIMIT} requests per 15 minutes; please wait and try again.`,
         });
         return;
       }
@@ -1238,9 +1239,9 @@ export function createRequestHandler({
       }
       const limit = aiRequestsByAddress.get(address);
       limit.count += 1;
-      if (limit.count > 10) {
+      if (limit.count > AI_RATE_LIMIT) {
         sendJson(response, 429, {
-          error: 'Too many AI relevance requests were sent from this device. Please wait 15 minutes and try again.',
+          error: `Too many AI relevance requests were sent from this device. The limit is ${AI_RATE_LIMIT} requests per 15 minutes; please wait and try again.`,
         });
         return;
       }

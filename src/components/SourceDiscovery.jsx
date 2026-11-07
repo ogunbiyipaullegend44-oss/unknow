@@ -36,7 +36,6 @@ import './SourceDiscovery.css';
 
 const MAX_COMPARE_SOURCES = 5;
 const RESULTS_PER_CATEGORY = 12;
-const MAX_AI_ASSESSMENT_SOURCES = 50;
 const AI_REQUEST_BATCH_SIZE = 25;
 const MIN_AI_RELEVANCE_SCORE = 55;
 const INITIAL_FILTERS = {
@@ -214,6 +213,7 @@ export default function SourceDiscovery({
   }));
   const [notice, setNotice] = useState('');
   const [aiScores, setAiScores] = useState({});
+  const aiScoresRef = useRef({});
   const [aiAssessmentQuestion, setAiAssessmentQuestion] = useState('');
   const [aiFilterActive, setAiFilterActive] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -396,9 +396,9 @@ export default function SourceDiscovery({
     if (!useAiQuestion) return sorted;
     const originalOrder = new Map(sorted.map((item, index) => [item.id, index]));
     return sorted
-      .filter((item) => (aiScores[item.id]?.score ?? -1) >= MIN_AI_RELEVANCE_SCORE)
+      .filter((item) => !aiScores[item.id] || aiScores[item.id].score >= MIN_AI_RELEVANCE_SCORE)
       .sort((left, right) =>
-        aiScores[right.id].score - aiScores[left.id].score ||
+        (aiScores[right.id]?.score ?? 0) - (aiScores[left.id]?.score ?? 0) ||
         originalOrder.get(left.id) - originalOrder.get(right.id),
       );
   }, [
@@ -413,16 +413,11 @@ export default function SourceDiscovery({
   ]);
   const displayedItems = availableItems;
   const aiCandidates = useMemo(() => {
-    return sortSources(classifiedItems
-      .filter((item) => !excludedIds.has(item.id))
-      .filter((item) => matchesSourceFilters(
-        item,
-        deferredFilters,
-        filterContext,
-        compileSourceFilters(deferredFilters, filterContext),
-      )), deferredFilters.sort)
-      .slice(0, MAX_AI_ASSESSMENT_SOURCES);
-  }, [classifiedItems, deferredFilters, excludedIds, filterContext]);
+    return sortSources(
+      classifiedItems.filter((item) => !excludedIds.has(item.id)),
+      deferredFilters.sort,
+    );
+  }, [classifiedItems, deferredFilters.sort, excludedIds]);
   const aiCandidateSignature = aiCandidates.map((item) => item.id).join('|');
   const filterChips = useMemo(
     () => removableFilterChips(filters, (key, value) => {
@@ -488,10 +483,11 @@ export default function SourceDiscovery({
     aiRequestController.current = null;
     setAiBusy(false);
     setAiScores({});
+    aiScoresRef.current = {};
     setAiAssessmentQuestion('');
     setAiFilterActive(false);
     setAiError('');
-  }, [research.id, research.retrievedAt]);
+  }, [research.id, research.question, research.retrievedAt]);
 
   useEffect(() => {
     setFilters({
@@ -499,6 +495,7 @@ export default function SourceDiscovery({
       categories: research.relatedSourceCategories ?? [],
     });
     setAiScores({});
+    aiScoresRef.current = {};
     setAiAssessmentQuestion('');
     setAiFilterActive(false);
     setAiError('');
@@ -514,6 +511,7 @@ export default function SourceDiscovery({
     });
     setExcludedIds(new Set());
     setAiScores({});
+    aiScoresRef.current = {};
     setAiAssessmentQuestion('');
     setAiFilterActive(false);
     setAiError('');
@@ -538,19 +536,23 @@ export default function SourceDiscovery({
       setAiError('No sources match the other filters to assess. Clear or adjust filters and try again.');
       return;
     }
+    const pendingCandidates = aiCandidates.filter((item) => !aiScoresRef.current[item.id]);
+    if (!pendingCandidates.length) {
+      setAiFilterActive(true);
+      setAiError('');
+      return;
+    }
 
     aiRequestController.current?.abort();
     const controller = new AbortController();
     aiRequestController.current = controller;
     setAiBusy(true);
     setAiError('');
-    setAiFilterActive(false);
-    setAiScores({});
+    if (!Object.keys(aiScoresRef.current).length) setAiFilterActive(false);
     setAiAssessmentQuestion(question);
     try {
-      const assessments = {};
-      for (let offset = 0; offset < aiCandidates.length; offset += AI_REQUEST_BATCH_SIZE) {
-        const batch = aiCandidates.slice(offset, offset + AI_REQUEST_BATCH_SIZE);
+      for (let offset = 0; offset < pendingCandidates.length; offset += AI_REQUEST_BATCH_SIZE) {
+        const batch = pendingCandidates.slice(offset, offset + AI_REQUEST_BATCH_SIZE);
         const response = await fetch(apiUrl('/api/research/ai-relevance'), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -584,6 +586,7 @@ export default function SourceDiscovery({
           throw new Error('The AI returned an incomplete assessment. No scores were applied.');
         }
         const expectedIds = new Set(batch.map((item) => item.id));
+        const batchAssessments = {};
         for (const evaluation of result.evaluations) {
           if (!expectedIds.has(evaluation.id) ||
             !Number.isInteger(evaluation.score) ||
@@ -593,23 +596,23 @@ export default function SourceDiscovery({
             typeof evaluation.context !== 'string') {
             throw new Error('The AI returned an invalid assessment. No scores were applied.');
           }
-          assessments[evaluation.id] = {
+          batchAssessments[evaluation.id] = {
             score: evaluation.score,
             reason: evaluation.reason,
             context: evaluation.context,
           };
         }
+        aiScoresRef.current = { ...aiScoresRef.current, ...batchAssessments };
+        setAiScores(aiScoresRef.current);
       }
-      setAiScores(assessments);
-      const strongMatches = Object.values(assessments)
+      const strongMatches = Object.values(aiScoresRef.current)
         .filter(({ score }) => score >= MIN_AI_RELEVANCE_SCORE).length;
       setAiFilterActive(true);
       setNotice(strongMatches
-        ? `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}”; ${strongMatches} met the strong contextual-match threshold. Scores indicate topical relevance, not factual accuracy or source quality.`
-        : `AI assessed ${aiCandidates.length} source${aiCandidates.length === 1 ? '' : 's'} against “${question}” but found no strong contextual matches. The AI filter is active; use “Show all retrieved sources” to review unfiltered results.`);
+        ? `AI assessed ${Object.keys(aiScoresRef.current).length} retrieved sources against “${question}”; ${strongMatches} met the strong contextual-match threshold. Scores indicate topical relevance, not factual accuracy or source quality.`
+        : `AI assessed ${Object.keys(aiScoresRef.current).length} retrieved sources against “${question}” but found no strong contextual matches. The AI filter is active; use “Show all retrieved sources” to review unfiltered results.`);
     } catch (error) {
       if (error.name === 'AbortError') return;
-      setAiScores({});
       setAiError(error.message || 'AI relevance assessment could not be completed.');
     } finally {
       if (aiRequestController.current === controller) {
@@ -655,7 +658,7 @@ export default function SourceDiscovery({
   return (
     <div className="discovery-workspace">
       <p className="ai-relevance-disclosure">
-        ChatGPT (OpenAI) automatically compares your research question with retrieved source text to filter contextual matches. The question and up to {MAX_AI_ASSESSMENT_SOURCES} source titles/text excerpts are sent to OpenAI’s API; API usage may incur charges. This estimates relevance, not factual accuracy or source quality. If AI is unavailable, retrieved sources remain visible.
+        ChatGPT (OpenAI) automatically compares your research question with the available text for every retrieved source, in batches, including additional catalog pages as you load them. Only indexed abstracts or descriptions are assessed; full texts are not fetched. API usage may incur charges. This estimates relevance, not factual accuracy or source quality. If AI is unavailable, retrieved sources remain visible.
       </p>
       {aiBusy && <p className="filter-limitation" role="status">Checking source context with AI…</p>}
       {aiError && (
